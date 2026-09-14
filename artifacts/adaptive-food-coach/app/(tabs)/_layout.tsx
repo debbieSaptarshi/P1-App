@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
@@ -10,9 +10,54 @@ import * as Haptics from 'expo-haptics';
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const colors = useColors();
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+
+  const closeMenu = () => {
+    Haptics.selectionAsync();
+    setIsAddMenuOpen(false);
+  };
+
+  const handleMenuAction = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsAddMenuOpen(false);
+  };
 
   return (
     <View style={[styles.dockContainer, { paddingBottom: insets.bottom || 24 }]} pointerEvents="box-none">
+      <Modal
+        visible={isAddMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
+        statusBarTranslucent
+      >
+        <View style={styles.addMenuScreen}>
+          <Pressable
+            style={styles.addMenuBackdrop}
+            accessibilityLabel="Close add menu"
+            accessibilityRole="button"
+            onPress={closeMenu}
+          />
+          <View style={[styles.addMenu, { bottom: (insets.bottom || 24) + 88 }]}>
+            <AddMenuAction icon="maximize" label="Scan Food" onPress={handleMenuAction} />
+            <AddMenuAction icon="search" label="Food Database" onPress={handleMenuAction} />
+            <AddMenuAction icon="activity" label="Log Exercise" onPress={handleMenuAction} />
+            <AddMenuAction icon="bookmark" label="Saved Foods" onPress={handleMenuAction} />
+          </View>
+          <Pressable
+            style={[
+              styles.modalCloseButton,
+              { bottom: insets.bottom || 24, backgroundColor: colors.primary },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Close add menu"
+            testID="close-add-menu"
+            onPress={closeMenu}
+          >
+            <Feather name="x" size={24} color="#ffffff" />
+          </Pressable>
+        </View>
+      </Modal>
       <BlurView
         intensity={30}
         tint="light"
@@ -66,14 +111,45 @@ function CustomTabBar({ state, navigation }: any) {
 
       <Pressable
         style={[styles.addButton, { backgroundColor: colors.primary }]}
-        onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
-        accessibilityLabel="Add meal"
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          setIsAddMenuOpen((open) => !open);
+        }}
+        accessibilityLabel={isAddMenuOpen ? 'Close add menu' : 'Open add menu'}
         accessibilityRole="button"
+        accessibilityState={{ expanded: isAddMenuOpen }}
         testID="tab-add"
       >
-        <Feather name="plus" size={24} color="#ffffff" />
+        <Feather name={isAddMenuOpen ? 'x' : 'plus'} size={24} color="#ffffff" />
       </Pressable>
     </View>
+  );
+}
+
+function AddMenuAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: 'maximize' | 'search' | 'activity' | 'bookmark';
+  label: string;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.addMenuAction, pressed && styles.addMenuActionPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      testID={`add-menu-${label.toLowerCase().replace(' ', '-')}`}
+      onPress={onPress}
+    >
+      <View style={[styles.addMenuIcon, { backgroundColor: colors.muted }]}>
+        <Feather name={icon} size={20} color={colors.foreground} />
+      </View>
+      <Text style={[styles.addMenuLabel, { color: colors.foreground }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -106,6 +182,58 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 132,
     backgroundColor: 'rgba(255,255,255,0.54)',
+  },
+  addMenuScreen: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  addMenuBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.68)',
+  },
+  addMenu: {
+    position: 'absolute',
+    right: 20,
+    width: 200,
+    gap: 8,
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    right: 16,
+    height: 64,
+    width: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0A7AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  addMenuAction: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  addMenuActionPressed: {
+    opacity: 0.74,
+    transform: [{ scale: 0.98 }],
+  },
+  addMenuIcon: {
+    height: 40,
+    width: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addMenuLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
   },
   dockPill: {
     flex: 1,
