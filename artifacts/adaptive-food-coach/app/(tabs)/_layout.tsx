@@ -6,7 +6,12 @@ import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -28,7 +33,7 @@ function CustomTabBar({ state, navigation }: any) {
       <Modal
         visible={isAddMenuOpen}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={closeMenu}
         statusBarTranslucent
       >
@@ -131,7 +136,10 @@ function RotatingAddIcon({ isOpen }: { isOpen: boolean }) {
   const rotation = useSharedValue(0);
 
   useEffect(() => {
-    rotation.value = withTiming(isOpen ? 45 : 0, { duration: 180 });
+    rotation.value = withTiming(isOpen ? 45 : 0, {
+      duration: 220,
+      easing: Easing.inOut(Easing.ease),
+    });
   }, [isOpen, rotation]);
 
   const animatedStyle = useAnimatedStyle(() => ({
