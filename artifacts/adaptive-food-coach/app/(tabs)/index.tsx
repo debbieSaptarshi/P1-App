@@ -13,9 +13,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import Svg, { Circle, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
@@ -114,12 +115,13 @@ export default function HomeScreen() {
         {/* Dashboard Card */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.dashboardCard}>
           <View>
+            <MaterialCommunityIcons name="fire" size={26} color="#FF6A1A" style={styles.caloriesIcon} />
             <Text style={styles.caloriesNumber}>1,314</Text>
             <Text style={styles.caloriesLabel}>Calories Left</Text>
           </View>
           <View style={styles.progressRingContainer}>
             <Text style={styles.progressLabel}>60%</Text>
-            <OvalProgress progress={60} color={colors.primary} trackColor={colors.secondaryForeground} />
+            <OvalProgress progress={60} color="#FFFFFF" trackColor="#2B3549" thumbColor={colors.primary} />
           </View>
         </Animated.View>
 
@@ -229,24 +231,30 @@ function CircularProgress({ size, progress, strokeWidth, color, trackColor }: an
   );
 }
 
-function OvalProgress({ progress, color, trackColor }: { progress: number; color: string; trackColor: string }) {
-  const perimeter = 2 * (146 + 48);
+function OvalProgress({
+  progress,
+  color,
+  trackColor,
+  thumbColor,
+}: {
+  progress: number;
+  color: string;
+  trackColor: string;
+  thumbColor: string;
+}) {
+  const trackPath = 'M92 4 H42 A38 38 0 0 0 4 42 A38 38 0 0 0 42 80 H142 A38 38 0 0 0 180 42 A38 38 0 0 0 142 4 H92';
+  const progressPath = 'M92 4 H42 A38 38 0 0 0 4 42 A38 38 0 0 0 42 80 H132';
   return (
-    <Svg width={164} height={70} viewBox="0 0 164 70">
-      <Rect x={4} y={4} width={156} height={62} rx={31} fill="none" stroke={trackColor} strokeWidth={7} opacity={0.35} />
-      <Rect
-        x={4}
-        y={4}
-        width={156}
-        height={62}
-        rx={31}
+    <Svg width={184} height={84} viewBox="0 0 184 84">
+      <Path d={trackPath} fill="none" stroke={trackColor} strokeWidth={8} strokeLinecap="round" />
+      <Path
+        d={progressPath}
         fill="none"
         stroke={color}
-        strokeWidth={7}
+        strokeWidth={8}
         strokeLinecap="round"
-        strokeDasharray={perimeter}
-        strokeDashoffset={perimeter - (perimeter * progress) / 100}
       />
+      <Circle cx={132} cy={80} r={9} fill={thumbColor} stroke="#FFFFFF" strokeWidth={5} />
     </Svg>
   );
 }
@@ -434,6 +442,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     letterSpacing: -1,
     marginBottom: 4,
+  },
+  caloriesIcon: {
+    marginBottom: 2,
   },
   caloriesLabel: {
     color: '#A1A1AA',
