@@ -170,13 +170,13 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
             <BlurView
-              intensity={32}
+              intensity={10}
               tint="light"
               pointerEvents="none"
               style={[styles.edgeBlur, styles.edgeBlurLeft]}
             />
             <BlurView
-              intensity={32}
+              intensity={10}
               tint="light"
               pointerEvents="none"
               style={[styles.edgeBlur, styles.edgeBlurRight]}
@@ -286,8 +286,8 @@ function RadialMealCard({
         styles.mealCard,
         {
           backgroundColor: colors.card,
-          opacity: active ? 1 : 0.72,
-          transform: [{ scale: pressed ? 0.98 : active ? 1 : 0.94 }],
+          opacity: active ? 1 : 0.48,
+          transform: [{ scale: pressed ? 0.98 : active ? 1 : 0.93 }],
         },
       ]}
     >
@@ -520,7 +520,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 38,
     bottom: 0,
-    width: 38,
+    width: 56,
+    opacity: 0.42,
   },
   edgeBlurLeft: {
     left: 0,
@@ -548,13 +549,13 @@ const styles = StyleSheet.create({
     width: 178,
     height: 178,
     borderRadius: 89,
-    backgroundColor: 'rgba(255,255,255,0.76)',
+    backgroundColor: 'rgba(255,255,255,0.34)',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
     elevation: 12,
   },
   mealImage: {
@@ -564,10 +565,10 @@ const styles = StyleSheet.create({
   },
   mealName: {
     minHeight: 60,
-    fontSize: 23,
-    fontFamily: 'Inter_600SemiBold',
-    lineHeight: 29,
-    letterSpacing: -0.2,
+    fontSize: 24,
+    fontFamily: 'Inter_500Medium',
+    lineHeight: 30,
+    letterSpacing: -0.45,
     textAlign: 'center',
   },
   calorieBlock: {
@@ -583,7 +584,7 @@ const styles = StyleSheet.create({
   },
   mealCals: {
     fontSize: 24,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_500Medium',
   },
   mealUnit: {
     fontSize: 12,

@@ -65,7 +65,7 @@ function CustomTabBar({ state, navigation }: any) {
         </View>
       </Modal>
       <BlurView
-        intensity={30}
+        intensity={8}
         tint="light"
         pointerEvents="none"
         style={styles.dockBlurPlate}
@@ -207,8 +207,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 132,
-    backgroundColor: 'rgba(255,255,255,0.54)',
+    height: 88,
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   addMenuScreen: {
     flex: 1,
