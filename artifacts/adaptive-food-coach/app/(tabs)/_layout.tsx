@@ -4,6 +4,7 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 
 function CustomTabBar({ state, navigation }: any) {
@@ -12,6 +13,12 @@ function CustomTabBar({ state, navigation }: any) {
 
   return (
     <View style={[styles.dockContainer, { paddingBottom: insets.bottom || 24 }]} pointerEvents="box-none">
+      <BlurView
+        intensity={30}
+        tint="light"
+        pointerEvents="none"
+        style={styles.dockBlurPlate}
+      />
       <View style={styles.dockPill}>
         <Pressable
           style={styles.tabItem}
@@ -91,6 +98,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
+  },
+  dockBlurPlate: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 132,
+    backgroundColor: 'rgba(255,255,255,0.54)',
   },
   dockPill: {
     flex: 1,

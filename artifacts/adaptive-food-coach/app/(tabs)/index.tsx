@@ -1,20 +1,39 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, Image, Pressable, Dimensions } from 'react-native';
+import {
+  Dimensions,
+  Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Rect } from 'react-native-svg';
-import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
-const MEAL_CARD_WIDTH = width * 0.85;
+const MEAL_CARD_WIDTH = 250;
+const MEAL_CARD_GAP = 16;
+
+const meals = [
+  { id: '1', name: 'Roasted Chicken with Vegetable', calories: 637, protein: 65, carbs: 45, fat: 18 },
+  { id: '2', name: 'Protein Bowl with Greens', calories: 518, protein: 48, carbs: 39, fat: 16 },
+  { id: '3', name: 'Salmon with Roasted Vegetables', calories: 584, protein: 54, carbs: 32, fat: 22 },
+];
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
 
   const [selectedDay, setSelectedDay] = useState('23');
+  const [activeMeal, setActiveMeal] = useState(0);
 
   const days = [
     { day: 'Sun', num: '18' },
@@ -125,35 +144,60 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.carouselContent}
-            snapToInterval={MEAL_CARD_WIDTH + 16}
-            decelerationRate="fast"
+          <View style={styles.radialCarousel}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.carouselContent,
+                { paddingHorizontal: Math.max((width - MEAL_CARD_WIDTH) / 2, 20) },
+              ]}
+              snapToInterval={MEAL_CARD_WIDTH + MEAL_CARD_GAP}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              scrollEventThrottle={16}
+              onMomentumScrollEnd={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                const next = Math.round(
+                  event.nativeEvent.contentOffset.x / (MEAL_CARD_WIDTH + MEAL_CARD_GAP),
+                );
+                setActiveMeal(Math.max(0, Math.min(next, meals.length - 1)));
+                Haptics.selectionAsync();
+              }}
+              testID="meal-radial-carousel"
+            >
+              {meals.map((meal, index) => (
+                <RadialMealCard key={meal.id} meal={meal} active={activeMeal === index} />
+              ))}
+            </ScrollView>
+            <BlurView
+              intensity={32}
+              tint="light"
+              pointerEvents="none"
+              style={[styles.edgeBlur, styles.edgeBlurLeft]}
+            />
+            <BlurView
+              intensity={32}
+              tint="light"
+              pointerEvents="none"
+              style={[styles.edgeBlur, styles.edgeBlurRight]}
+            />
+          </View>
+
+          <View
+            style={styles.pagination}
+            accessibilityLabel={`Meal ${activeMeal + 1} of ${meals.length}`}
           >
-            <Animated.View entering={FadeInRight.duration(400).delay(400)} style={[styles.mealCard, { backgroundColor: colors.card, width: MEAL_CARD_WIDTH }]}>
-              <Image source={require('@/assets/images/profile-avatar.png')} style={styles.mealImage} />
-              
-              <View style={styles.mealInfo}>
-                <View style={styles.mealTitleRow}>
-                  <Text style={[styles.mealName, { color: colors.foreground }]} numberOfLines={2}>
-                    Roasted Chicken with Vegetable
-                  </Text>
-                  <Text style={[styles.mealCals, { color: colors.foreground }]}>637 <Text style={styles.mealUnit}>Kcal</Text></Text>
-                </View>
-
-                <View style={styles.mealMacros}>
-                  <Text style={[styles.mealMacroText, { color: colors.mutedForeground }]}>Carbs: 35g</Text>
-                  <Text style={[styles.mealMacroText, { color: colors.mutedForeground }]}>Protein: 40g</Text>
-                  <Text style={[styles.mealMacroText, { color: colors.mutedForeground }]}>Fat: 20g</Text>
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Peeking card placeholder */}
-            <View style={[styles.mealCard, { backgroundColor: colors.card, width: MEAL_CARD_WIDTH, opacity: 0.5 }]} />
-          </ScrollView>
+            {meals.map((meal, index) => (
+              <View
+                key={meal.id}
+                style={[
+                  styles.paginationDot,
+                  { backgroundColor: index === activeMeal ? colors.foreground : colors.border },
+                  index === activeMeal && styles.paginationDotActive,
+                ]}
+              />
+            ))}
+          </View>
         </Animated.View>
 
       </ScrollView>
@@ -219,6 +263,70 @@ function MacroCard({ title, value, progress, color, icon }: any) {
         <CircularProgress size={76} progress={progress} strokeWidth={5} color={color} trackColor={colors.secondary} />
         <Feather name={icon} size={18} color={colors.foreground} style={styles.macroIcon} />
       </View>
+    </View>
+  );
+}
+
+function RadialMealCard({
+  meal,
+  active,
+}: {
+  meal: (typeof meals)[number];
+  active: boolean;
+}) {
+  const colors = useColors();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${meal.name}, ${meal.calories} calories`}
+      testID={`meal-card-${meal.id}`}
+      onPress={() => Haptics.selectionAsync()}
+      style={({ pressed }) => [
+        styles.mealCard,
+        {
+          backgroundColor: colors.card,
+          opacity: active ? 1 : 0.72,
+          transform: [{ scale: pressed ? 0.98 : active ? 1 : 0.94 }],
+        },
+      ]}
+    >
+      <View style={styles.plateHalo}>
+        <Image
+          source={require('@/assets/images/profile-avatar.png')}
+          style={styles.mealImage}
+          resizeMode="cover"
+        />
+      </View>
+      <Text style={[styles.mealName, { color: colors.foreground }]} numberOfLines={2}>
+        {meal.name}
+      </Text>
+      <View style={styles.calorieBlock}>
+        <Feather name="zap" size={13} color={colors.foreground} />
+        <Text style={[styles.calorieLabel, { color: colors.mutedForeground }]}>Calories</Text>
+        <Text style={[styles.mealCals, { color: colors.foreground }]}>
+          {meal.calories}{' '}
+          <Text style={[styles.mealUnit, { color: colors.mutedForeground }]}>Kcal</Text>
+        </Text>
+      </View>
+      <View style={styles.mealMacros}>
+        <MealMacro icon="circle" value={meal.protein} />
+        <MealMacro icon="box" value={meal.carbs} />
+        <MealMacro icon="heart" value={meal.fat} />
+      </View>
+    </Pressable>
+  );
+}
+
+function MealMacro({ icon, value }: { icon: 'circle' | 'box' | 'heart'; value: number }) {
+  const colors = useColors();
+
+  return (
+    <View style={styles.mealMacro}>
+      <Feather name={icon} size={13} color={colors.foreground} />
+      <Text style={[styles.mealMacroValue, { color: colors.foreground }]}>
+        {value} <Text style={[styles.mealMacroUnit, { color: colors.mutedForeground }]}>g</Text>
+      </Text>
     </View>
   );
 }
@@ -381,12 +489,14 @@ const styles = StyleSheet.create({
   },
   mealsSection: {
     marginBottom: 32,
+    marginHorizontal: -20,
   },
   sectionHeader: {
     marginBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
   },
   sectionTitle: {
     fontSize: 20,
@@ -398,56 +508,121 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
   },
   carouselContent: {
-    gap: 16,
-    paddingRight: 20,
+    gap: MEAL_CARD_GAP,
+    paddingTop: 58,
+    paddingBottom: 18,
+  },
+  radialCarousel: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  edgeBlur: {
+    position: 'absolute',
+    top: 38,
+    bottom: 0,
+    width: 38,
+  },
+  edgeBlurLeft: {
+    left: 0,
+  },
+  edgeBlurRight: {
+    right: 0,
   },
   mealCard: {
+    width: MEAL_CARD_WIDTH,
+    minHeight: 326,
     borderRadius: 24,
-    overflow: 'hidden',
+    paddingTop: 104,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 10, height: 20 },
     shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  plateHalo: {
+    position: 'absolute',
+    top: -52,
+    width: 178,
+    height: 178,
+    borderRadius: 89,
+    backgroundColor: 'rgba(255,255,255,0.76)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 12,
   },
   mealImage: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    resizeMode: 'cover',
-    alignSelf: 'center',
-    marginTop: 18,
-  },
-  mealInfo: {
-    padding: 20,
-  },
-  mealTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    gap: 12,
+    width: 154,
+    height: 154,
+    borderRadius: 77,
   },
   mealName: {
-    flex: 1,
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
-    lineHeight: 24,
+    minHeight: 60,
+    fontSize: 23,
+    fontFamily: 'Inter_600SemiBold',
+    lineHeight: 29,
+    letterSpacing: -0.2,
+    textAlign: 'center',
+  },
+  calorieBlock: {
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+    marginVertical: 10,
+  },
+  calorieLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter_400Regular',
   },
   mealCals: {
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontSize: 24,
+    fontFamily: 'Inter_600SemiBold',
   },
   mealUnit: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: 'Inter_400Regular',
   },
   mealMacros: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 8,
   },
-  mealMacroText: {
-    fontSize: 13,
+  mealMacro: {
+    width: 66,
+    alignItems: 'center',
+    gap: 3,
+  },
+  mealMacroValue: {
+    fontSize: 16,
     fontFamily: 'Inter_500Medium',
+  },
+  mealMacroUnit: {
+    fontSize: 10,
+    fontFamily: 'Inter_400Regular',
+  },
+  pagination: {
+    height: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  paginationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  paginationDotActive: {
+    width: 12,
   },
 });
