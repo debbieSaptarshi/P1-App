@@ -53,7 +53,11 @@ function CustomTabBar({ state, navigation }: any) {
           <Pressable
             style={[
               styles.modalCloseButton,
-              { bottom: insets.bottom || 24, backgroundColor: colors.primary },
+              {
+                bottom: insets.bottom || 24,
+                right: 20,
+                backgroundColor: colors.primary,
+              },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Close add menu"
@@ -116,7 +120,10 @@ function CustomTabBar({ state, navigation }: any) {
       </View>
 
       <Pressable
-        style={[styles.addButton, { backgroundColor: colors.primary }]}
+        style={[
+          styles.addButton,
+          { backgroundColor: colors.primary, opacity: isAddMenuOpen ? 0 : 1 },
+        ]}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setIsAddMenuOpen((open) => !open);
