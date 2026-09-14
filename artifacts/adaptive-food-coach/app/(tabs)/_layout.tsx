@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +6,7 @@ import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -54,7 +55,7 @@ function CustomTabBar({ state, navigation }: any) {
             testID="close-add-menu"
             onPress={closeMenu}
           >
-            <Feather name="x" size={24} color="#ffffff" />
+            <RotatingAddIcon isOpen />
           </Pressable>
         </View>
       </Modal>
@@ -120,9 +121,27 @@ function CustomTabBar({ state, navigation }: any) {
         accessibilityState={{ expanded: isAddMenuOpen }}
         testID="tab-add"
       >
-        <Feather name={isAddMenuOpen ? 'x' : 'plus'} size={24} color="#ffffff" />
+        <RotatingAddIcon isOpen={isAddMenuOpen} />
       </Pressable>
     </View>
+  );
+}
+
+function RotatingAddIcon({ isOpen }: { isOpen: boolean }) {
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    rotation.value = withTiming(isOpen ? 45 : 0, { duration: 180 });
+  }, [isOpen, rotation]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Feather name="plus" size={25} color="#ffffff" />
+    </Animated.View>
   );
 }
 
