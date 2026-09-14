@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "veiNnvuGLvZ7aWtzXd7Ms"
+uri = "file://artifacts/adaptive-food-coach/PRODUCT_PLAN.md"
+type = "text"
+title = "Adaptive Food Coach Product Plan"
+description = "A Figma-informed MVP plan covering product scope, screen map, user journeys, recommendation logic, data model, delivery phases, safety boundaries, and success measures."
+logical_id = "8ed760a3-9e1d-4663-aff9-c65ff9d7be78"
+content_hash = "sha256:b9c0cf5282435fb60b5ae92d4ee1bdf2479866612cb0bb6fa15e070535f4b5a0"
+size = 8919
+mtime_ms = 1789362369367
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:2674d898-84ce-4bc6-a5ed-2d1624f8ff7c/8ed760a3-9e1d-4663-aff9-c65ff9d7be78/6052e975-4473-49d5-92b7-9aad0c9fd2fc"
+storage_version_token = "1789362381245931"
+content_type = "text/markdown"

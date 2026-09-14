@@ -1,0 +1,73 @@
+A new Noom-like app should not be another calorie counter with motivational lessons. It should be an adaptive food coach that tells users what to eat next, explains why, adjusts to their real life, and measures sustainable health—not perfection.
+
+The market is already crowded from three sides: Noom has psychology, GLP-1 programs, and payer distribution; MyFitnessPal has logging, food data, and AI; Healthify/Berry Street has dietitians and insurance-backed clinical care. Your app needs to own a narrower, clearer job. citefile:attached_assets/Pasted-COMPETITOR-INTELLIGENCE-SINGLE-WORKING-PAGE-Noom-MyFitn_1789331251952.txt
+
+Recommended product
+
+A personalized nutrition and metabolic-health coach for people using—or coming off—GLP-1 medication.
+
+Its promise:
+
+Eat well, preserve muscle, manage appetite, and maintain progress—without obsessively tracking every calorie.
+The app should focus on five things:
+
+Simple meal capture
+Log by photo, voice, barcode, or quick text.
+Ask for corrections instead of pretending the AI is always accurate.
+Example: “This looks like rice, dal, vegetables, and yogurt. Is that right?”
+What to eat next
+The home screen should recommend the next meal or snack.
+Suggestions should consider hunger, protein, fiber, medication side effects, budget, time, and available ingredients.
+Users should see practical options, not a nutrition lecture.
+Nutrition that matters
+Prioritize protein, fiber, vegetables, hydration, and meal consistency.
+Show calories only when useful, not as the entire product.
+Give feedback like: “You’re short on protein today. Add eggs, tofu, Greek yogurt, paneer, or fish.”
+GLP-1-aware support
+Track nausea, constipation, appetite changes, energy, and food tolerance.
+Recommend smaller meals, protein-first eating, hydration, and strength habits.
+Include a maintenance plan for users reducing or stopping medication.
+Medication changes should always remain under a clinician’s direction.
+Weekly adaptive coaching
+Replace generic daily lessons with a short weekly review:
+What worked?
+Where did meals break down?
+What should change next week?
+The app should suggest one experiment, such as “prepare breakfast three days this week” or “add 25g protein at lunch.”
+The strongest differentiation
+
+Make the app contextual and culturally flexible. A user should be able to say:
+
+“I eat Indian food with my family.”
+“I work night shifts.”
+“I have only 10 minutes for lunch.”
+“I’m vegetarian.”
+“I’m eating from a restaurant today.”
+“I feel nauseous after my medication.”
+The app should adapt the meal, not ask the user to adapt their life to a rigid diet plan.
+
+Core screens for the first version
+
+Today: next meal, daily check-in, one useful recommendation
+Log: photo/voice/text meal entry with quick correction
+Plan: flexible meals based on preferences, schedule, and groceries
+Progress: weight trend, protein/fiber consistency, energy, symptoms, strength habits
+Coach: conversational support and weekly experiments
+Avoid building a huge food database, a long psychology course, or a medication marketplace at the start. Those put you into direct competition with established products before you have a distinct advantage.
+
+Best MVP
+
+Start with one audience: GLP-1 users who want to maintain results and protect muscle.
+
+Build a lightweight version with:
+
+onboarding questionnaire
+meal photo or text logging
+protein/fiber feedback
+side-effect check-in
+three personalized meal suggestions per day
+weekly progress review
+optional human dietitian review
+Your clearest product sentence is:
+
+For people using or coming off GLP-1 medication, the app provides practical, culturally relevant food coaching that helps them preserve muscle, manage appetite, and maintain healthy weight without obsessive calorie tracking.
