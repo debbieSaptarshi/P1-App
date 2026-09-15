@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
   },
   macrosRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 4,
   },
   macroCard: {
     flex: 1,
