@@ -153,7 +153,7 @@ export default function HomeScreen() {
             </View>
 
             {/* Page 2: Nutrients */}
-            <View style={{ width: PAGE_WIDTH }}>
+            <View style={{ width: PAGE_WIDTH, paddingLeft: 2, paddingRight: 2 }}>
               <HealthScoreCard score={5} outOf={10} advice="Your diet is balanced, but try adding more fiber-rich foods to hit your daily target." />
               <View style={styles.macrosRow}>
                 <MacroCard title="Fiber Left" value="18 g" progress={62} color={colors.primary} icon="leaf" iconSet="mci" />
