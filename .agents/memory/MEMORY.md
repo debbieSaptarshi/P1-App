@@ -1,0 +1,1 @@
+- [Expo static build port conflict](expo-static-build-port-conflict.md) — the one-off Expo build can collide with the mockup preview on Metro port 8081.

@@ -22,7 +22,9 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 const { width } = Dimensions.get('window');
 const MEAL_CARD_WIDTH = 250;
 const MEAL_CARD_GAP = 16;
-const PAGE_WIDTH = width - 40;
+const DASHBOARD_CAROUSEL_SIDE_INSET = 20;
+const HEALTH_SCORE_PAGE_INSET = 2;
+const PAGE_WIDTH = width - DASHBOARD_CAROUSEL_SIDE_INSET * 2;
 
 const meals = [
   { id: '1', name: 'Roasted Chicken with Vegetable', calories: 637, protein: 65, carbs: 45, fat: 18 },
@@ -133,7 +135,7 @@ export default function HomeScreen() {
             testID="dashboard-pager"
           >
             {/* Page 1: Calories */}
-            <View style={{ width: PAGE_WIDTH }}>
+            <View style={{ width: PAGE_WIDTH }} testID="dashboard-page-calories">
               <View style={styles.dashboardCard}>
                 <View>
                   <MaterialCommunityIcons name="fire" size={26} color="#FF6A1A" style={styles.caloriesIcon} />
@@ -153,7 +155,14 @@ export default function HomeScreen() {
             </View>
 
             {/* Page 2: Nutrients */}
-            <View style={{ width: PAGE_WIDTH, paddingLeft: 2, paddingRight: 2 }}>
+            <View
+              style={{
+                width: PAGE_WIDTH,
+                paddingLeft: HEALTH_SCORE_PAGE_INSET,
+                paddingRight: HEALTH_SCORE_PAGE_INSET,
+              }}
+              testID="dashboard-page-health-score"
+            >
               <HealthScoreCard score={5} outOf={10} advice="Your diet is balanced, but try adding more fiber-rich foods to hit your daily target." />
               <View style={styles.macrosRow}>
                 <MacroCard title="Fiber Left" value="18 g" progress={62} color={colors.primary} icon="leaf" iconSet="mci" />
@@ -163,7 +172,7 @@ export default function HomeScreen() {
             </View>
 
             {/* Page 3: Workout */}
-            <View style={{ width: PAGE_WIDTH }}>
+            <View style={{ width: PAGE_WIDTH }} testID="dashboard-page-workout">
               <WaterIntakeCard value={waterIntake} goal={2.5} onChange={setWaterIntake} />
               <View style={styles.macrosRow}>
                 <MacroCard title="Steps" value="6,248" progress={62} color={colors.primary} icon="shoe-print" iconSet="mci" wide />
@@ -333,7 +342,7 @@ function MacroCard({ title, value, progress, color, icon, iconSet, wide }: any) 
 function HealthScoreCard({ score, outOf, advice }: { score: number; outOf: number; advice: string }) {
   const progress = (score / outOf) * 100;
   return (
-    <View style={styles.healthScoreCard}>
+    <View style={styles.healthScoreCard} testID="health-score-card">
       <View style={styles.healthScoreHeader}>
         <MaterialCommunityIcons name="heart-pulse" size={22} color={'#4ADE80'} />
         <Text style={styles.healthScoreTitle}>Health Score</Text>
