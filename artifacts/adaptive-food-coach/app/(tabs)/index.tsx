@@ -148,9 +148,9 @@ export default function HomeScreen() {
                 </View>
               </View>
               <View style={styles.macrosRow}>
-                <MacroCard title="Protein Left" value="137 g" progress={74} color={colors.primary} icon="circle" />
-                <MacroCard title="Carbs Left" value="109 g" progress={52} color={colors.primary} icon="box" />
-                <MacroCard title="Fat Left" value="36 g" progress={80} color={colors.primary} icon="heart" />
+                <MacroCard title="Protein Left" value="137 g" progress={74} color={colors.primary} emoji="🥚" />
+                <MacroCard title="Carbs Left" value="109 g" progress={52} color={colors.primary} emoji="🍞" />
+                <MacroCard title="Fat Left" value="36 g" progress={80} color={colors.primary} emoji="🥑" />
               </View>
             </View>
 
@@ -322,18 +322,22 @@ function OvalProgress({
   );
 }
 
-function MacroCard({ title, value, progress, color, icon, iconSet, wide }: any) {
+function MacroCard({ title, value, progress, color, icon, iconSet, emoji, wide }: any) {
   const colors = useColors();
   const IconComp = iconSet === 'mci' ? MaterialCommunityIcons : Feather;
   return (
     <View style={[styles.macroCard, wide && styles.macroCardWide, { backgroundColor: colors.card }]}>
       <View style={styles.macroCardBody}>
-        <Text style={[styles.macroCardValue, { color: colors.foreground }]}>{value}</Text>
+        <Text style={[styles.macroCardValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
         <Text style={[styles.macroCardLeft, { color: colors.mutedForeground }]}>{title}</Text>
       </View>
       <View style={styles.macroRing}>
-        <CircularProgress size={76} progress={progress} strokeWidth={5} color={color} trackColor={colors.secondary} />
-        <IconComp name={icon} size={18} color={colors.foreground} style={styles.macroIcon} />
+        <CircularProgress size={68} progress={progress} strokeWidth={5} color={color} trackColor={colors.secondary} />
+        {emoji ? (
+          <Text style={styles.macroEmoji}>{emoji}</Text>
+        ) : (
+          <IconComp name={icon} size={18} color={colors.foreground} style={styles.macroIcon} />
+        )}
       </View>
     </View>
   );
@@ -572,7 +576,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.15,
@@ -581,17 +585,17 @@ const styles = StyleSheet.create({
   },
   caloriesNumber: {
     color: '#ffffff',
-    fontSize: 36,
+    fontSize: 40,
     fontFamily: 'Inter_700Bold',
-    letterSpacing: -1,
-    marginBottom: 4,
+    letterSpacing: -0.5,
+    marginBottom: 2,
   },
   caloriesIcon: {
     marginBottom: 2,
   },
   caloriesLabel: {
-    color: '#A1A1AA',
-    fontSize: 15,
+    color: '#94A3B8',
+    fontSize: 13,
     fontFamily: 'Inter_500Medium',
   },
   progressRingContainer: {
@@ -601,22 +605,23 @@ const styles = StyleSheet.create({
   progressLabel: {
     position: 'absolute',
     color: '#ffffff',
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
     zIndex: 1,
   },
   pagerWrapper: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   macrosRow: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 8,
   },
   macroCard: {
     flex: 1,
-    borderRadius: 20,
-    padding: 16,
-    height: 174,
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    height: 162,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -624,13 +629,14 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   macroCardWide: {
-    height: 164,
+    height: 162,
+    paddingHorizontal: 16,
   },
   healthScoreCard: {
     backgroundColor: '#0A0A0A',
     borderRadius: 24,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.15,
@@ -680,7 +686,7 @@ const styles = StyleSheet.create({
   waterCard: {
     borderRadius: 24,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -751,8 +757,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   macroCardValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: 'Inter_700Bold',
+    letterSpacing: -0.2,
   },
   macroCardLeft: {
     fontSize: 12,
@@ -766,6 +773,10 @@ const styles = StyleSheet.create({
   },
   macroIcon: {
     position: 'absolute',
+  },
+  macroEmoji: {
+    position: 'absolute',
+    fontSize: 18,
   },
   mealsSection: {
     marginBottom: 32,
@@ -889,8 +900,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: 6,
+    marginTop: 16,
   },
   paginationDot: {
     width: 6,
