@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type RelativePathString } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
@@ -14,11 +14,19 @@ import { colors, radii, spacing } from '@/constants/tokens';
 import { Button, Card, ModalSheet, SectionTitle } from '@/components/ui';
 import { appStoreActions, useAppStore } from '@/hooks/useAppStore';
 
+type ProfileHref =
+  | '/profile-edit/weight'
+  | '/profile-edit/height'
+  | '/profile-edit/dob'
+  | '/profile-edit/steps'
+  | '/profile-edit/nutrients'
+  | '/profile-edit/preferences';
+
 interface DetailRow {
   key: string;
   label: string;
   value: string;
-  href: string;
+  href: ProfileHref;
 }
 
 interface DetailCardProps {
@@ -269,7 +277,7 @@ function DetailCard({ title, subtitle, rows }: DetailCardProps) {
               accessibilityRole="button"
               accessibilityLabel={`Edit ${row.label}`}
               testID={`detail-row-${row.key}`}
-              onPress={() => router.push(row.href)}
+              onPress={() => router.push(row.href as RelativePathString)}
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             >
               <View>
