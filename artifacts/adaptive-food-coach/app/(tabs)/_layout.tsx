@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
@@ -13,9 +13,19 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+type AddAction = { label: string; icon: keyof typeof Feather.glyphMap; href: Href };
+
+const ADD_ACTIONS: AddAction[] = [
+  { label: 'Scan Food', icon: 'maximize', href: '/scan/food-camera' },
+  { label: 'Food Database', icon: 'search', href: '/log-food' },
+  { label: 'Log Exercise', icon: 'activity', href: '/exercise' },
+  { label: 'Saved Foods', icon: 'bookmark', href: '/log-food/saved' },
+];
+
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const colors = useColors();
+  const router = useRouter();
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
 
   const closeMenu = () => {
@@ -23,9 +33,10 @@ function CustomTabBar({ state, navigation }: any) {
     setIsAddMenuOpen(false);
   };
 
-  const handleMenuAction = () => {
+  const handleMenuAction = (href: Href) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsAddMenuOpen(false);
+    router.push(href);
   };
 
   return (
@@ -45,10 +56,14 @@ function CustomTabBar({ state, navigation }: any) {
             onPress={closeMenu}
           />
           <View style={[styles.addMenu, { bottom: (insets.bottom || 24) + 88 }]}>
-            <AddMenuAction icon="maximize" label="Scan Food" onPress={handleMenuAction} />
-            <AddMenuAction icon="search" label="Food Database" onPress={handleMenuAction} />
-            <AddMenuAction icon="activity" label="Log Exercise" onPress={handleMenuAction} />
-            <AddMenuAction icon="bookmark" label="Saved Foods" onPress={handleMenuAction} />
+            {ADD_ACTIONS.map((action) => (
+              <AddMenuAction
+                key={action.label}
+                icon={action.icon}
+                label={action.label}
+                onPress={() => handleMenuAction(action.href)}
+              />
+            ))}
           </View>
           <Pressable
             style={[
@@ -90,32 +105,41 @@ function CustomTabBar({ state, navigation }: any) {
 
         <Pressable
           style={styles.tabItem}
-          onPress={() => Haptics.selectionAsync()}
+          onPress={() => {
+            Haptics.selectionAsync();
+            navigation.navigate('progress');
+          }}
           accessibilityLabel="Charts tab"
           accessibilityRole="tab"
           testID="tab-charts"
         >
-          <Feather name="bar-chart-2" size={24} color={'#8E8E93'} />
+          <Feather name="bar-chart-2" size={24} color={state.index === 1 ? '#ffffff' : '#8E8E93'} />
         </Pressable>
 
         <Pressable
           style={styles.tabItem}
-          onPress={() => Haptics.selectionAsync()}
-          accessibilityLabel="Search tab"
+          onPress={() => {
+            Haptics.selectionAsync();
+            navigation.navigate('community');
+          }}
+          accessibilityLabel="Community tab"
           accessibilityRole="tab"
-          testID="tab-search"
+          testID="tab-community"
         >
-          <Feather name="search" size={24} color={'#8E8E93'} />
+          <Feather name="users" size={24} color={state.index === 2 ? '#ffffff' : '#8E8E93'} />
         </Pressable>
 
         <Pressable
           style={styles.tabItem}
-          onPress={() => Haptics.selectionAsync()}
+          onPress={() => {
+            Haptics.selectionAsync();
+            navigation.navigate('profile');
+          }}
           accessibilityLabel="Profile tab"
           accessibilityRole="tab"
           testID="tab-profile"
         >
-          <Feather name="user" size={24} color={'#8E8E93'} />
+          <Feather name="user" size={24} color={state.index === 3 ? '#ffffff' : '#8E8E93'} />
         </Pressable>
       </View>
 
@@ -165,7 +189,7 @@ function AddMenuAction({
   label,
   onPress,
 }: {
-  icon: 'maximize' | 'search' | 'activity' | 'bookmark';
+  icon: keyof typeof Feather.glyphMap;
   label: string;
   onPress: () => void;
 }) {
@@ -195,8 +219,8 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="progress" />
-      <Tabs.Screen name="profile" />
       <Tabs.Screen name="community" />
+      <Tabs.Screen name="profile" />
     </Tabs>
   );
 }
@@ -275,7 +299,7 @@ const styles = StyleSheet.create({
   dockPill: {
     flex: 1,
     height: 64,
-    backgroundColor: '#1C1C1E', // Black dock
+    backgroundColor: '#1C1C1E',
     borderRadius: 32,
     flexDirection: 'row',
     alignItems: 'center',
