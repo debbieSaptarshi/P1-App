@@ -194,6 +194,9 @@ export default function TabLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" />
+      <Tabs.Screen name="progress" />
+      <Tabs.Screen name="profile" />
+      <Tabs.Screen name="community" />
     </Tabs>
   );
 }
