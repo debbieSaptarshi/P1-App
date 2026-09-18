@@ -21,10 +21,16 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+    <Stack screenOptions={{ headerBackTitle: 'Back', headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
+      <Stack.Screen name="scan" options={{ headerShown: false }} />
+      <Stack.Screen name="log-food" options={{ headerShown: false }} />
+      <Stack.Screen name="exercise" options={{ headerShown: false }} />
+      <Stack.Screen name="milestones" options={{ headerShown: false }} />
+      <Stack.Screen name="group" options={{ headerShown: false }} />
+      <Stack.Screen name="profile-edit" options={{ headerShown: false }} />
     </Stack>
   );
 }

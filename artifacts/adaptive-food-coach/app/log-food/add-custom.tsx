@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { Button, Header, TextField } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/tokens';
 import { useAppStore } from '@/hooks/useAppStore';
-import type { SavedFood } from '@/types';
+import type { FoodItem, SavedFood } from '@/types';
 
 interface DraftFood {
   name: string;
@@ -84,6 +84,18 @@ export default function AddCustomFoodScreen() {
       return;
     }
     const id = `cf_${Date.now()}`;
+    const food: FoodItem = {
+      id,
+      name: draft.name.trim(),
+      brand: draft.brand.trim() || undefined,
+      servingSize: draft.servingSize.trim() || '1 serving',
+      calories: previewTotals.calories,
+      protein: previewTotals.protein,
+      carbs: previewTotals.carbs,
+      fat: previewTotals.fat,
+      fiber: previewTotals.fiber,
+      sodium: previewTotals.sodium,
+    };
     const macros = {
       calories: previewTotals.calories,
       protein: previewTotals.protein,
@@ -102,6 +114,7 @@ export default function AddCustomFoodScreen() {
       calories: previewTotals.calories,
       createdAt: new Date().toISOString(),
     };
+    actions.upsertFood(food);
     actions.saveFood(saved);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();

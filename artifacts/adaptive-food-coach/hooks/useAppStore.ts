@@ -26,6 +26,7 @@ import {
   WeightEntry,
 } from '@/types';
 import { seedProfile } from './seedProfile';
+import { mergeFoodCatalog } from '@/constants/logFoodCatalog';
 import { seedFoodDatabase } from './seedFoodDatabase';
 import { seedFoodLogs, seedExerciseLogs, seedWeightHistory } from './seedLogs';
 import {
@@ -38,7 +39,7 @@ import {
   seedSavedFoods,
 } from './seedContent';
 
-const STORAGE_KEY = '@adaptive_food_coach/v1';
+const STORAGE_KEY = '@adaptive_food_coach/v2';
 
 interface PersistedState {
   profile: UserProfile;
@@ -65,7 +66,7 @@ const initialState: PersistedState = {
     generating: false,
     complete: false,
   },
-  foodDatabase: seedFoodDatabase,
+  foodDatabase: mergeFoodCatalog(seedFoodDatabase),
   foodLogs: seedFoodLogs,
   savedFoods: seedSavedFoods,
   mealRecipes: seedMealRecipes,
@@ -93,8 +94,12 @@ async function hydrate() {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<PersistedState>;
       singletonState = { ...initialState, ...parsed };
+      singletonState.foodDatabase = mergeFoodCatalog(singletonState.foodDatabase);
     } else {
-      singletonState = initialState;
+      singletonState = {
+        ...initialState,
+        foodDatabase: mergeFoodCatalog(initialState.foodDatabase),
+      };
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(singletonState));
     }
   } catch (err) {
@@ -124,6 +129,31 @@ void hydrate();
 
 function update(patch: Partial<PersistedState>) {
   return persist({ ...singletonState, ...patch });
+}
+
+const EMPTY_TOTALS: DailyFoodLog['totals'] = {
+  calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0,
+};
+
+function emptyDay(date: string): DailyFoodLog {
+  return { date, entries: [], waterMl: 0, totals: { ...EMPTY_TOTALS } };
+}
+
+function totalsFor(entries: FoodLogEntry[]): DailyFoodLog['totals'] {
+  const totals = { ...EMPTY_TOTALS };
+  for (const e of entries) {
+    totals.calories += e.food.calories * e.quantity;
+    totals.protein += e.food.protein * e.quantity;
+    totals.carbs += e.food.carbs * e.quantity;
+    totals.fat += e.food.fat * e.quantity;
+    totals.fiber += (e.food.fiber ?? 0) * e.quantity;
+    totals.sodium += (e.food.sodium ?? 0) * e.quantity;
+  }
+  return totals;
+}
+
+function dayLog(date: string): DailyFoodLog {
+  return singletonState.foodLogs.find((d) => d.date === date) ?? emptyDay(date);
 }
 
 // ---- Public actions ----
@@ -174,41 +204,32 @@ export const appStoreActions = {
     const id = `fdl_${Date.now()}`;
     const loggedAt = new Date().toISOString();
     const newEntry: FoodLogEntry = { id, loggedAt, ...entry };
-    const dayLogs = singletonState.foodLogs.filter((d) => d.date !== entry.date);
-    const today = singletonState.foodLogs.find((d) => d.date === entry.date);
-    const entries = today ? [...today.entries, newEntry] : [newEntry];
-    const totals = {
-      calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0,
-    };
-    for (const e of entries) {
-      totals.calories += e.food.calories * e.quantity;
-      totals.protein += e.food.protein * e.quantity;
-      totals.carbs += e.food.carbs * e.quantity;
-      totals.fat += e.food.fat * e.quantity;
-      totals.fiber += (e.food.fiber ?? 0) * e.quantity;
-      totals.sodium += (e.food.sodium ?? 0) * e.quantity;
-    }
-    const next = { date: entry.date, entries, totals };
+    const today = dayLog(entry.date);
+    const entries = [...today.entries, newEntry];
     const others = singletonState.foodLogs.filter((d) => d.date !== entry.date);
-    return update({ foodLogs: [...others, next] });
+    return update({
+      foodLogs: [...others, { ...today, date: entry.date, entries, totals: totalsFor(entries) }],
+    });
   },
   deleteFoodLog(date: string, entryId: string) {
     const others = singletonState.foodLogs.filter((d) => d.date !== date);
     const today = singletonState.foodLogs.find((d) => d.date === date);
     if (!today) return update({ foodLogs: others });
     const entries = today.entries.filter((e) => e.id !== entryId);
-    const totals = {
-      calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0,
-    };
-    for (const e of entries) {
-      totals.calories += e.food.calories * e.quantity;
-      totals.protein += e.food.protein * e.quantity;
-      totals.carbs += e.food.carbs * e.quantity;
-      totals.fat += e.food.fat * e.quantity;
-      totals.fiber += (e.food.fiber ?? 0) * e.quantity;
-      totals.sodium += (e.food.sodium ?? 0) * e.quantity;
-    }
-    return update({ foodLogs: [...others, { date, entries, totals }] });
+    return update({ foodLogs: [...others, { ...today, date, entries, totals: totalsFor(entries) }] });
+  },
+  setWaterIntake(date: string, ml: number) {
+    const today = dayLog(date);
+    const others = singletonState.foodLogs.filter((d) => d.date !== date);
+    const waterMl = Math.max(0, Math.round(ml));
+    return update({ foodLogs: [...others, { ...today, date, waterMl }] });
+  },
+  upsertFood(food: FoodItem) {
+    const exists = singletonState.foodDatabase.some((f) => f.id === food.id);
+    const foodDatabase = exists
+      ? singletonState.foodDatabase.map((f) => (f.id === food.id ? food : f))
+      : [food, ...singletonState.foodDatabase];
+    return update({ foodDatabase });
   },
   saveFood(saved: SavedFood) {
     return update({ savedFoods: [saved, ...singletonState.savedFoods] });
@@ -300,8 +321,13 @@ export function useAppStore() {
 
   const todaysFoodLog = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    return state.foodLogs.find((d) => d.date === today) ?? { date: today, entries: [], totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0 } };
+    return state.foodLogs.find((d) => d.date === today) ?? emptyDay(today);
   }, [state.foodLogs]);
+
+  const foodLogForDate = useCallback(
+    (date: string) => state.foodLogs.find((d) => d.date === date) ?? emptyDay(date),
+    [state.foodLogs],
+  );
 
   const streakDays = useMemo(() => {
     const sorted = [...state.foodLogs]
@@ -330,6 +356,7 @@ export function useAppStore() {
     hydrated,
     state,
     todaysFoodLog,
+    foodLogForDate,
     streakDays,
     searchFood,
     actions: appStoreActions,

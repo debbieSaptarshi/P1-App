@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -7,38 +8,44 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, {
-  Defs,
-  LinearGradient,
-  Path,
-  Stop,
-  Text as SvgText,
-} from 'react-native-svg';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-import { Feather } from '@expo/vector-icons';
-import {
-  BadgeIcon,
-  Button,
-  Card,
-  CircularProgress,
-  Header,
-  ModalSheet,
-  ProgressBar,
-  SectionTitle,
-  TextField,
-} from '@/components/ui';
+import { Button, ModalSheet, TextField } from '@/components/ui';
 import { useAppStore } from '@/hooks/useAppStore';
-import { useColors } from '@/hooks/useColors';
 import { colors as tokens, radii, spacing } from '@/constants/tokens';
-import type { WeightEntry } from '@/types';
+import type { DailyFoodLog, WeightEntry } from '@/types';
 
-const CHART_HEIGHT = 180;
-const CHART_WIDTH = 320;
-const CHART_PAD = 24;
-const CHART_HORIZON_DAYS = 14;
+const CARD_RADIUS = 24;
+const CHART_HEIGHT = 192;
+const WEIGHT_Y_MAX = 70;
+const WEIGHT_Y_MIN = 60;
+const CALORIE_Y_MAX = 500;
+const ENERGY_Y_MAX = 500;
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+const WEEKDAY_FULL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+const WEIGHT_RANGES = [
+  { key: '90D', days: 90 },
+  { key: '6M', days: 182 },
+  { key: '1Y', days: 365 },
+  { key: 'ALL', days: null },
+] as const;
+const WEEK_OFFSETS = [
+  { key: 'This wk', weeksAgo: 0 },
+  { key: 'Last wk', weeksAgo: 1 },
+  { key: '2 wk ago', weeksAgo: 2 },
+  { key: '3 wk ago', weeksAgo: 3 },
+] as const;
+const WEIGHT_CHANGE_WINDOWS = [
+  { label: '3 days', days: 3 },
+  { label: '7 days', days: 7 },
+  { label: '14 days', days: 14 },
+  { label: '30 days', days: 30 },
+  { label: '90 days', days: 90 },
+  { label: 'All Time', days: null },
+] as const;
 
 type Mood = 'happy' | 'neutral' | 'sad';
 
@@ -48,134 +55,276 @@ const MOOD_OPTIONS: { value: Mood; label: string; emoji: string }[] = [
   { value: 'sad', label: 'Tough', emoji: '😢' },
 ];
 
+function startOfWeekSunday(date: Date): Date {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  next.setDate(next.getDate() - next.getDay());
+  return next;
+}
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatKg(value: number, decimals = 2): string {
+  return `${value.toFixed(decimals)} kg`;
+}
+
+function formatGoalDate(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function bmiCategory(bmi: number): {
+  label: string;
+  pillBg: string;
+  pillFg: string;
+} {
+  if (bmi < 18.5) {
+    return { label: 'Underweight', pillBg: '#1E3A5F', pillFg: '#2E90FA' };
+  }
+  if (bmi < 25) {
+    return { label: 'Healthy', pillBg: '#052E16', pillFg: '#16B364' };
+  }
+  if (bmi < 30) {
+    return { label: 'Overweight', pillBg: '#542C0D', pillFg: '#EAAA08' };
+  }
+  return { label: 'Obese', pillBg: '#450A0A', pillFg: '#EF4444' };
+}
+
+function bmiMarkerPercent(bmi: number): number {
+  const bands = [
+    { min: 14, max: 18.5 },
+    { min: 18.5, max: 25 },
+    { min: 25, max: 30 },
+    { min: 30, max: 40 },
+  ];
+  const clamped = Math.max(14, Math.min(40, bmi));
+  const index = bands.findIndex((band) => clamped < band.max) === -1
+    ? 3
+    : Math.max(0, bands.findIndex((band) => clamped < band.max));
+  const band = bands[index]!;
+  const local = (clamped - band.min) / (band.max - band.min);
+  return ((index + Math.max(0, Math.min(1, local))) / 4) * 100;
+}
+
+function weightAtOrBefore(sorted: WeightEntry[], date: string): number | null {
+  const found = [...sorted].reverse().find((entry) => entry.date <= date);
+  return found?.weightKg ?? null;
+}
+
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
-  const palette = useColors();
   const router = useRouter();
-
   const { state, streakDays, actions } = useAppStore();
   const profile = state.profile;
-  const weights: WeightEntry[] = state.weightHistory ?? [];
+  const weights = state.weightHistory ?? [];
   const foodLogs = state.foodLogs ?? [];
   const exerciseLogs = state.exerciseLogs ?? [];
   const milestones = state.milestones ?? [];
 
+  const [weightRange, setWeightRange] = useState<(typeof WEIGHT_RANGES)[number]['key']>('90D');
+  const [calorieWeek, setCalorieWeek] = useState(0);
+  const [energyWeek, setEnergyWeek] = useState(0);
   const [weightSheetVisible, setWeightSheetVisible] = useState(false);
-  const [weightDraft, setWeightDraft] = useState<string>(
-    profile.currentWeightKg.toString(),
-  );
+  const [weightDraft, setWeightDraft] = useState(profile.currentWeightKg.toString());
   const [weightMood, setWeightMood] = useState<Mood>('happy');
   const [weightNote, setWeightNote] = useState('');
 
-  // --- Derived metrics -------------------------------------------------------
-  const targetKg = profile.targetWeightKg;
-  const currentKg = profile.currentWeightKg;
-  const startingKg = useMemo(() => {
-    if (!weights.length) return currentKg;
-    const oldest = weights.reduce((acc, e) => (e.date < acc.date ? e : acc), weights[0]!);
-    return oldest.weightKg;
-  }, [weights, currentKg]);
-  const deltaKg = parseFloat((currentKg - targetKg).toFixed(1));
-  const totalLoss = parseFloat((startingKg - currentKg).toFixed(1));
+  const logsByDate = useMemo(() => {
+    const map = new Map<string, DailyFoodLog>();
+    for (const log of foodLogs) map.set(log.date, log);
+    return map;
+  }, [foodLogs]);
 
+  const sortedWeights = useMemo(
+    () => [...weights].sort((a, b) => (a.date < b.date ? -1 : 1)),
+    [weights],
+  );
+
+  const startingKg = useMemo(() => {
+    if (!sortedWeights.length) return profile.currentWeightKg;
+    return sortedWeights[0]!.weightKg;
+  }, [sortedWeights, profile.currentWeightKg]);
+
+  const currentKg = profile.currentWeightKg;
+  const targetKg = profile.targetWeightKg;
   const journeyProgress = useMemo(() => {
-    if (startingKg === targetKg) return 1;
     const span = Math.abs(startingKg - targetKg);
     if (span === 0) return 1;
-    const moved = Math.abs(startingKg - currentKg);
-    return Math.max(0, Math.min(1, moved / span));
+    return Math.max(0, Math.min(1, Math.abs(startingKg - currentKg) / span));
   }, [startingKg, currentKg, targetKg]);
 
-  // Slice last N days and order oldest -> newest for the chart.
-  const chartSeries: WeightEntry[] = useMemo(() => {
-    const sorted = [...weights]
-      .sort((a, b) => (a.date < b.date ? -1 : 1))
-      .slice(-CHART_HORIZON_DAYS);
-    while (sorted.length < CHART_HORIZON_DAYS && sorted.length > 0) {
-      // Pad with the earliest entry so the line starts at the left edge.
-      sorted.unshift({ ...sorted[0]!, id: `pad_${sorted[0]!.id}` });
-    }
-    return sorted;
-  }, [weights]);
+  const goalByLabel = useMemo(() => {
+    const remaining = currentKg - targetKg;
+    if (remaining <= 0) return formatGoalDate(new Date());
+    const weekly = 0.5;
+    const days = Math.max(7, Math.round((remaining / weekly) * 7));
+    return formatGoalDate(addDays(new Date(), days));
+  }, [currentKg, targetKg]);
 
-  const chartStats = useMemo(() => {
-    if (!chartSeries.length) {
-      return { min: 0, max: 0, range: 0 };
-    }
-    const values = chartSeries.map((e) => e.weightKg);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = Math.max(0.5, max - min);
-    return { min, max, range };
-  }, [chartSeries]);
+  const nextWeighInDays = useMemo(() => {
+    const last = sortedWeights[sortedWeights.length - 1];
+    if (!last) return 7;
+    const lastDate = new Date(`${last.date}T00:00:00`);
+    const due = addDays(lastDate, 7);
+    return Math.max(0, Math.ceil((due.getTime() - Date.now()) / 86_400_000));
+  }, [sortedWeights]);
 
-  const { polylinePath, areaPath } = useMemo(() => {
-    if (chartSeries.length === 0) {
-      return { polylinePath: '', areaPath: '' };
-    }
-    const usableWidth = CHART_WIDTH - CHART_PAD * 2;
-    const usableHeight = CHART_HEIGHT - CHART_PAD * 2;
-    const denom = Math.max(1, chartSeries.length - 1);
-    const points = chartSeries.map((entry, idx) => {
-      const x = CHART_PAD + (idx / denom) * usableWidth;
-      const normalised = (entry.weightKg - chartStats.min) / chartStats.range;
-      const y = CHART_PAD + (1 - normalised) * usableHeight;
-      return { x, y };
+  const weekDots = useMemo(() => {
+    const start = startOfWeekSunday(new Date());
+    const today = isoDate(new Date());
+    return WEEKDAY_LABELS.map((label, index) => {
+      const date = isoDate(addDays(start, index));
+      const logged = (logsByDate.get(date)?.entries.length ?? 0) > 0;
+      return { label, date, logged, isToday: date === today };
     });
-    const polyline = points
-      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
-      .join(' ');
-    const baseY = CHART_HEIGHT - CHART_PAD;
-    const first = points[0]!;
-    const last = points[points.length - 1]!;
-    const area = `${polyline} L ${last.x.toFixed(2)} ${baseY.toFixed(2)} L ${first.x.toFixed(2)} ${baseY.toFixed(2)} Z`;
-    return { polylinePath: polyline, areaPath: area };
-  }, [chartSeries, chartStats]);
+  }, [logsByDate]);
 
-  // --- 7-day calorie trend ---------------------------------------------------
-  const last7Days = useMemo(() => {
-    const out: { date: string; label: string; calories: number; goal: number }[] = [];
-    const calorieGoal = profile.nutrientGoals.calories;
-    const byDate = new Map(foodLogs.map((d) => [d.date, d]));
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
-      const log = byDate.get(date);
-      out.push({
+  const unlockedBadges = useMemo(
+    () => milestones.filter((badge) => badge.unlocked).length,
+    [milestones],
+  );
+
+  const weightBars = useMemo(() => {
+    const range = WEIGHT_RANGES.find((item) => item.key === weightRange);
+    const cutoff = range?.days
+      ? isoDate(addDays(new Date(), -(range.days - 1)))
+      : sortedWeights[0]?.date;
+    const series = cutoff
+      ? sortedWeights.filter((entry) => entry.date >= cutoff)
+      : sortedWeights;
+    const bucketCount = 16;
+    const values = !series.length
+      ? Array.from({ length: bucketCount }, () => currentKg)
+      : (() => {
+          const start = new Date(`${series[0]!.date}T00:00:00`);
+          const end = new Date(`${series[series.length - 1]!.date}T00:00:00`);
+          const span = Math.max(1, end.getTime() - start.getTime());
+          return Array.from({ length: bucketCount }, (_, index) => {
+            const t = index / Math.max(1, bucketCount - 1);
+            const date = isoDate(new Date(start.getTime() + t * span));
+            return weightAtOrBefore(series, date) ?? series[0]!.weightKg;
+          });
+        })();
+    const dataMin = Math.min(...values, targetKg);
+    const dataMax = Math.max(...values, startingKg);
+    const yMax = Math.max(WEIGHT_Y_MAX, Math.ceil(dataMax));
+    const yMin = Math.min(WEIGHT_Y_MIN, Math.floor(dataMin));
+    const step = Math.max(1, Math.round((yMax - yMin) / 5));
+    const labels = Array.from({ length: 6 }, (_, index) => String(yMax - index * step));
+    return { values, yMin: yMax - step * 5, yMax, labels };
+  }, [sortedWeights, weightRange, currentKg, targetKg, startingKg]);
+
+  const weightChanges = useMemo(() => {
+    const today = isoDate(new Date());
+    return WEIGHT_CHANGE_WINDOWS.map((window) => {
+      const fromDate = window.days ? isoDate(addDays(new Date(), -window.days)) : sortedWeights[0]?.date;
+      const from = fromDate ? weightAtOrBefore(sortedWeights, fromDate) : startingKg;
+      const to = weightAtOrBefore(sortedWeights, today) ?? currentKg;
+      const startValue = from ?? startingKg;
+      const delta = parseFloat((to - startValue).toFixed(2));
+      let outcome = `Stay on ${targetKg.toFixed(0)} kg`;
+      if (delta < -0.05) outcome = `Dropped to ${to.toFixed(2)} kg`;
+      else if (delta > 0.05) outcome = `Gained to ${to.toFixed(2)} kg`;
+      return {
+        label: window.label,
+        from: startValue,
+        outcome,
+      };
+    });
+  }, [sortedWeights, startingKg, currentKg, targetKg]);
+
+  const weekDaysForOffset = (weeksAgo: number) => {
+    const start = addDays(startOfWeekSunday(new Date()), -weeksAgo * 7);
+    return WEEKDAY_FULL.map((label, index) => {
+      const date = isoDate(addDays(start, index));
+      const log = logsByDate.get(date);
+      const burned = exerciseLogs
+        .filter((entry) => entry.date === date)
+        .reduce((sum, entry) => sum + entry.caloriesBurned, 0);
+      return {
+        label,
         date,
-        label: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
-        calories: log?.totals.calories ?? 0,
-        goal: calorieGoal,
-      });
-    }
-    return out;
-  }, [foodLogs, profile.nutrientGoals.calories]);
+        protein: log?.totals.protein ?? 0,
+        carbs: log?.totals.carbs ?? 0,
+        fat: log?.totals.fat ?? 0,
+        consumed: log?.totals.calories ?? 0,
+        burned,
+      };
+    });
+  };
 
-  const avgCalories = useMemo(() => {
-    const total = last7Days.reduce((sum, d) => sum + d.calories, 0);
-    return Math.round(total / Math.max(1, last7Days.length));
-  }, [last7Days]);
+  const calorieDays = useMemo(
+    () => weekDaysForOffset(calorieWeek),
+    [calorieWeek, logsByDate, exerciseLogs],
+  );
+  const energyDays = useMemo(
+    () => weekDaysForOffset(energyWeek),
+    [energyWeek, logsByDate, exerciseLogs],
+  );
+  const calorieAxis = useMemo(() => {
+    const totals = calorieDays.map(
+      (day) => day.protein * 4 + day.carbs * 4 + day.fat * 9,
+    );
+    const max = Math.max(CALORIE_Y_MAX, ...totals);
+    const yMax = Math.ceil(max / 100) * 100 || CALORIE_Y_MAX;
+    const step = yMax / 5;
+    return {
+      yMax,
+      labels: Array.from({ length: 6 }, (_, index) => String(Math.round(yMax - index * step))),
+    };
+  }, [calorieDays]);
+  const energyAxis = useMemo(() => {
+    const max = Math.max(
+      ENERGY_Y_MAX,
+      ...energyDays.map((day) => Math.max(day.burned, day.consumed)),
+    );
+    const yMax = Math.ceil(max / 100) * 100 || ENERGY_Y_MAX;
+    const step = yMax / 5;
+    return {
+      yMax,
+      labels: Array.from({ length: 6 }, (_, index) => String(Math.round(yMax - index * step))),
+    };
+  }, [energyDays]);
 
-  const weeklyWorkouts = useMemo(() => {
-    const cutoff = new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);
-    const today = new Date().toISOString().slice(0, 10);
-    return exerciseLogs.filter((e) => e.date >= cutoff && e.date <= today).length;
-  }, [exerciseLogs]);
+  const calorieAverage = useMemo(() => {
+    const totals = calorieDays.map((day) => day.consumed);
+    const filled = totals.filter((value) => value > 0);
+    if (!filled.length) return 0;
+    return Math.round(filled.reduce((sum, value) => sum + value, 0) / filled.length);
+  }, [calorieDays]);
 
-  const waterAvg = useMemo(() => {
-    const goal = profile.nutrientGoals.waterMl;
-    const recent7 = foodLogs
-      .slice(-7)
-      .map((d) => d.totals.sodium ?? 0);
-    // Not actually tracking water in food log data; derive from goal ratio keeping seed simple.
-    const seedBaseline = 0.82;
-    return Math.round(goal * seedBaseline);
-  }, [foodLogs, profile.nutrientGoals.waterMl]);
+  const energyTotals = useMemo(() => {
+    const burned = energyDays.reduce((sum, day) => sum + day.burned, 0);
+    const consumed = energyDays.reduce((sum, day) => sum + day.consumed, 0);
+    return { burned, consumed, energy: consumed - burned };
+  }, [energyDays]);
 
-  const startWeight = chartSeries.length > 0 ? chartSeries[0]!.weightKg : currentKg;
-  const endWeight = chartSeries.length > 0 ? chartSeries[chartSeries.length - 1]!.weightKg : currentKg;
-  const trendDelta = parseFloat((endWeight - startWeight).toFixed(1));
+  const bmi = useMemo(() => {
+    const meters = profile.heightCm / 100;
+    if (meters <= 0) return 0;
+    return parseFloat((currentKg / (meters * meters)).toFixed(1));
+  }, [profile.heightCm, currentKg]);
+  const bmiMeta = bmiCategory(bmi);
 
-  // --- Weight modal ----------------------------------------------------------
+  const openWeightSheet = () => {
+    Haptics.selectionAsync();
+    setWeightDraft(profile.currentWeightKg.toString());
+    setWeightMood('happy');
+    setWeightNote('');
+    setWeightSheetVisible(true);
+  };
+
   const submitWeight = async () => {
     const parsed = parseFloat(weightDraft.replace(',', '.'));
     if (!Number.isFinite(parsed) || parsed < 30 || parsed > 250) {
@@ -184,7 +333,7 @@ export default function ProgressScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await actions.addWeight({
-      date: new Date().toISOString().slice(0, 10),
+      date: isoDate(new Date()),
       weightKg: parsed,
       note: `${weightMood}${weightNote ? ` — ${weightNote}` : ''}`,
     });
@@ -192,291 +341,292 @@ export default function ProgressScreen() {
     setWeightNote('');
   };
 
-  const categoryCounts = useMemo(() => {
-    return milestones.reduce(
-      (acc, m) => {
-        acc.all += 1;
-        acc[m.category] = (acc[m.category] ?? 0) + 1;
-        if (m.unlocked) acc.unlocked += 1;
-        return acc;
-      },
-      { all: 0, streak: 0, nutrition: 0, exercise: 0, community: 0, unlocked: 0 },
-    );
-  }, [milestones]);
-
   return (
-    <View style={[styles.container, { backgroundColor: palette.background }]}>
-      <Header
-        title="Progress"
-        rightIcon="plus"
-        onRightPress={() => {
-          Haptics.selectionAsync();
-          setWeightDraft(profile.currentWeightKg.toString());
-          setWeightMood('happy');
-          setWeightNote('');
-          setWeightSheetVisible(true);
-        }}
-      />
-
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          {
-            paddingTop: spacing.xs,
-            paddingBottom: insets.bottom + 120,
-          },
+          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 120 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Weight hero card */}
-        <Animated.View entering={FadeIn.duration(400)} style={styles.heroCard}>
-          <View style={styles.heroBackgroundHalo} />
-          <View style={styles.heroRow}>
-            <View style={styles.heroLeft}>
-              <Text style={styles.heroEyebrow}>Current vs goal</Text>
-              <View style={styles.heroWeightRow}>
-                <Text style={styles.heroWeight}>{currentKg.toFixed(1)}</Text>
-                <Text style={styles.heroUnit}>kg</Text>
+        <Text style={styles.pageTitle}>Progress</Text>
+
+        <Animated.View entering={FadeInDown.duration(400).delay(40)} style={styles.heroRow}>
+          <View style={styles.statCard}>
+            <View style={styles.illustrationWrap}>
+              <Image
+                source={require('@/assets/images/progress/flame-only.png')}
+                style={styles.flameImage}
+                accessibilityLabel="Day streak"
+              />
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>{streakDays}</Text>
               </View>
-              <View style={styles.heroDeltaRow}>
-                <FeatherBadge
-                  positive={deltaKg <= 0}
-                  delta={deltaKg}
-                  caption={deltaKg <= 0 ? 'kg to lose' : 'kg past goal'}
-                />
-              </View>
-              <Text style={styles.heroCaption}>
-                Target {targetKg.toFixed(1)} kg · {profile.units.weight}
-              </Text>
             </View>
-
-            <CircularProgress
-              progress={journeyProgress}
-              size={132}
-              strokeWidth={10}
-              color={tokens.accentGreen}
-              trackColor="rgba(255,255,255,0.18)"
-            >
-              <Text style={styles.heroRingPct}>{Math.round(journeyProgress * 100)}%</Text>
-              <Text style={styles.heroRingSub}>to goal</Text>
-            </CircularProgress>
+            <Text style={styles.statCardLabel}>Day Streak</Text>
+            <View style={styles.weekDots}>
+              {weekDots.map((day) => (
+                <View key={day.date} style={styles.weekDotCol}>
+                  <Text
+                    style={[
+                      styles.weekDotLetter,
+                      (day.isToday || day.logged) && styles.weekDotLetterActive,
+                    ]}
+                  >
+                    {day.label}
+                  </Text>
+                  <View
+                    style={[
+                      styles.weekDot,
+                      day.logged && styles.weekDotLogged,
+                      day.isToday && styles.weekDotToday,
+                    ]}
+                  />
+                </View>
+              ))}
+            </View>
           </View>
 
-          <View style={styles.heroFooter}>
-            <HeroStat label="Started" value={`${startingKg.toFixed(1)} kg`} />
-            <HeroDivider />
-            <HeroStat
-              label="Lost"
-              value={`${totalLoss >= 0 ? '-' : '+'}${Math.abs(totalLoss).toFixed(1)} kg`}
-              accent={totalLoss >= 0 ? tokens.accentGreen : tokens.accentOrange}
-            />
-            <HeroDivider />
-            <HeroStat label="Streak" value={`${streakDays} days`} />
-          </View>
+          <Pressable
+            style={styles.statCard}
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push('/milestones');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Badge earned"
+            testID="progress-badges"
+          >
+            <View style={styles.illustrationWrap}>
+              <Image
+                source={require('@/assets/images/progress/badge-polygon.png')}
+                style={styles.badgeImage}
+                accessibilityLabel="Badge"
+              />
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>{unlockedBadges}</Text>
+              </View>
+            </View>
+            <Text style={styles.statCardLabel}>Badge Earned</Text>
+            <View style={styles.badgeDots}>
+              {[0, 1, 2].map((index) => (
+                <View key={index} style={styles.badgeDot} />
+              ))}
+            </View>
+          </Pressable>
         </Animated.View>
 
-        {/* Weight chart */}
-        <Animated.View entering={FadeInDown.duration(400).delay(60)}>
-          <SectionTitle
-            title="Weight trend"
-            action="14 days"
-          />
-          <Card style={styles.chartCard}>
-            <View style={styles.chartHeader}>
-              <View>
-                <Text style={styles.chartLabel}>Today</Text>
-                <Text style={styles.chartValue}>{endWeight.toFixed(1)} kg</Text>
-              </View>
-              <View style={styles.chartDelta}>
-                <FeatherBadge
-                  positive={trendDelta <= 0}
-                  delta={trendDelta}
-                  caption={trendDelta <= 0 ? 'kg this week' : 'kg up'}
-                />
+        <Animated.View entering={FadeInDown.duration(400).delay(80)}>
+          <Pressable
+            style={styles.darkCard}
+            onPress={openWeightSheet}
+            accessibilityRole="button"
+            accessibilityLabel="Current weight"
+            testID="current-weight-card"
+          >
+            <View style={styles.cardHeaderRow}>
+              <Text style={styles.darkTitle}>Current Weight</Text>
+              <View style={styles.darkChip}>
+                <Text style={styles.darkChipText}>
+                  Next Weight in : {nextWeighInDays} Days
+                </Text>
               </View>
             </View>
+            <View style={styles.weightTrack}>
+              <View style={[styles.weightFill, { width: `${journeyProgress * 100}%` }]} />
+              <View
+                style={[
+                  styles.weightThumb,
+                  { left: `${Math.max(2, Math.min(98, journeyProgress * 100))}%` },
+                ]}
+              />
+            </View>
+            <View style={styles.weightMetaRow}>
+              <Text style={styles.weightMeta}>
+                <Text style={styles.weightMetaMuted}>Start :</Text>
+                {` ${startingKg.toFixed(0)} kg`}
+              </Text>
+              <Text style={[styles.weightMeta, styles.weightMetaRight]}>
+                <Text style={styles.weightMetaMuted}>Goal :</Text>
+                {` ${targetKg.toFixed(0)} kg`}
+              </Text>
+            </View>
+            <Text style={styles.weightMeta}>
+              <Text style={styles.weightMetaMuted}>At your goal by</Text>
+              {` ${goalByLabel}`}
+            </Text>
+          </Pressable>
+        </Animated.View>
 
-            <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
-              <Defs>
-                <LinearGradient id="progress-area" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor={tokens.primary} stopOpacity="0.32" />
-                  <Stop offset="1" stopColor={tokens.primary} stopOpacity="0" />
-                </LinearGradient>
-              </Defs>
-              {/* Horizontal grid rules */}
-              {[0, 1, 2].map((line) => {
-                const y =
-                  CHART_PAD +
-                  (line / 2) * (CHART_HEIGHT - CHART_PAD * 2);
+        <Animated.View entering={FadeInDown.duration(400).delay(120)} style={styles.whiteCard}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.lightTitle}>Weight Progress</Text>
+            <View style={styles.lightChip}>
+              <Text style={styles.lightChipText}>
+                <Text style={styles.lightChipStrong}>{Math.round(journeyProgress * 100)}%</Text>
+                {' of Goals'}
+              </Text>
+            </View>
+          </View>
+          <YAxisChart
+            labels={weightBars.labels}
+            height={CHART_HEIGHT}
+          >
+            <View style={styles.weightBars}>
+              {weightBars.values.map((value, index) => {
+                const ratio = Math.max(
+                  0,
+                  Math.min(1, (value - weightBars.yMin) / Math.max(1, weightBars.yMax - weightBars.yMin)),
+                );
                 return (
-                  <Path
-                    key={`grid-${line}`}
-                    d={`M ${CHART_PAD} ${y} L ${CHART_WIDTH - CHART_PAD} ${y}`}
-                    stroke="rgba(15,23,42,0.05)"
-                    strokeWidth={1}
+                  <View
+                    key={`weight-bar-${index}`}
+                    style={[styles.weightBar, { height: Math.max(8, ratio * 144) }]}
                   />
                 );
               })}
-              <Path d={areaPath} fill="url(#progress-area)" />
-              <Path
-                d={polylinePath}
-                stroke={tokens.primary}
-                strokeWidth={2.5}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Goal reference line */}
-              {chartStats.range > 0
-                ? renderGoalLine(targetKg, chartStats, CHART_WIDTH, CHART_HEIGHT, CHART_PAD)
-                : null}
-              {chartSeries.length > 0 && (
-                <SvgText
-                  x={CHART_WIDTH - CHART_PAD}
-                  y={CHART_PAD + 8}
-                  fontSize="9"
-                  fontFamily="Inter_500Medium"
-                  fill={tokens.textMuted}
-                  textAnchor="end"
-                >
-                  Goal {targetKg.toFixed(1)} kg
-                </SvgText>
-              )}
-            </Svg>
-
-            <View style={styles.chartAxis}>
-              <Text style={styles.chartAxisText}>{firstDateLabel(chartSeries)}</Text>
-              <Text style={styles.chartAxisText}>{lastDateLabel(chartSeries)}</Text>
             </View>
-          </Card>
+          </YAxisChart>
+          <SegmentedControl
+            options={WEIGHT_RANGES.map((item) => item.key)}
+            value={weightRange}
+            onChange={(next) => {
+              Haptics.selectionAsync();
+              setWeightRange(next as typeof weightRange);
+            }}
+          />
         </Animated.View>
 
-        {/* Stat cards */}
-        <Animated.View entering={FadeInDown.duration(400).delay(120)}>
-          <SectionTitle title="This week" />
-          <View style={styles.statGrid}>
-            <StatTile
-              icon="zap"
-              label="Avg calories"
-              value={avgCalories.toLocaleString()}
-              unit="kcal"
-              tint={tokens.primary}
-            />
-            <StatTile
-              icon="award"
-              label="Streak"
-              value={`${streakDays}`}
-              unit={streakDays === 1 ? 'day' : 'days'}
-              tint={tokens.accentOrange}
-            />
-            <StatTile
-              icon="activity"
-              label="Workouts"
-              value={`${weeklyWorkouts}`}
-              unit={weeklyWorkouts === 1 ? 'session' : 'sessions'}
-              tint={tokens.accentPurple}
-            />
-            <StatTile
-              icon="droplet"
-              label="Water avg"
-              value={`${waterAvg}`}
-              unit="ml"
-              tint={tokens.primary}
-            />
+        <Animated.View entering={FadeInDown.duration(400).delay(160)} style={styles.whiteCard}>
+          <Text style={styles.lightTitle}>Weight Changes</Text>
+          <View style={styles.changeList}>
+            {weightChanges.map((row) => (
+              <View key={row.label} style={styles.changeRow}>
+                <Text style={styles.changePeriod}>{row.label}</Text>
+                <Text style={styles.changeFrom}>{formatKg(row.from)}</Text>
+                <ArrowRightIcon />
+                <Text style={styles.changeTo}>{row.outcome}</Text>
+              </View>
+            ))}
           </View>
         </Animated.View>
 
-        {/* Calorie trend bars */}
-        <Animated.View entering={FadeInDown.duration(400).delay(180)}>
-          <SectionTitle
-            title="Calorie trend"
-            action={`${avgCalories}/${profile.nutrientGoals.calories} kcal`}
+        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.whiteCard}>
+          <Text style={styles.lightTitle}>Daily Average Calories</Text>
+          <Text style={styles.heroMetric}>
+            {calorieAverage}
+            <Text style={styles.heroMetricUnit}> Cal</Text>
+          </Text>
+          <YAxisChart
+            labels={calorieAxis.labels}
+            height={CHART_HEIGHT}
+          >
+            <View style={styles.stackedBars}>
+              {calorieDays.map((day) => {
+                const px = (value: number) => Math.max(0, (value / calorieAxis.yMax) * 144);
+                return (
+                  <View key={day.date} style={styles.stackedCol}>
+                    <View style={styles.stackedStack}>
+                      <View style={[styles.stackFat, { height: Math.max(px(day.fat * 9), 2) }]} />
+                      <View style={[styles.stackCarbs, { height: Math.max(px(day.carbs * 4), 2) }]} />
+                      <View style={[styles.stackProtein, { height: Math.max(px(day.protein * 4), 2) }]} />
+                    </View>
+                    <Text style={styles.dayTick}>{day.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </YAxisChart>
+          <View style={styles.legendRow}>
+            <LegendDot color="#DC2626" label="Protein" />
+            <LegendDot color="#1570EF" label="Carbs" />
+            <LegendDot color="#EF6820" label="Fats" />
+          </View>
+          <SegmentedControl
+            options={WEEK_OFFSETS.map((item) => item.key)}
+            value={WEEK_OFFSETS[calorieWeek]!.key}
+            onChange={(next) => {
+              Haptics.selectionAsync();
+              setCalorieWeek(WEEK_OFFSETS.findIndex((item) => item.key === next));
+            }}
           />
-          <Card style={styles.calorieCard}>
-            {last7Days.map((day) => {
-              const ratio = day.goal > 0 ? day.calories / day.goal : 0;
-              const clamped = Math.max(0, Math.min(1, ratio));
-              const overOrUnder =
-                day.calories === 0
-                  ? '—'
-                  : `${day.calories >= day.goal ? '+' : '-'}${Math.abs(day.calories - day.goal)}`;
-              return (
-                <View key={day.date} style={styles.calorieRow}>
-                  <View style={styles.calorieDayLabel}>
-                    <Text style={styles.calorieDay}>{day.label}</Text>
-                    <Text style={styles.calorieDate}>
-                      {day.date.slice(5)}
-                    </Text>
-                  </View>
-                  <View style={styles.calorieBarTrack}>
-                    <ProgressBar
-                      progress={clamped}
-                      color={
-                        day.calories === 0
-                          ? tokens.border
-                          : day.calories > day.goal
-                          ? tokens.accentOrange
-                          : tokens.primary
-                      }
-                      backgroundColor={tokens.background}
-                      height={10}
-                    />
-                  </View>
-                  <View style={styles.calorieNumeric}>
-                    <Text style={styles.calorieValue}>
-                      {day.calories.toLocaleString()}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.calorieDelta,
-                        {
-                          color:
-                            day.calories === 0
-                              ? tokens.textMuted
-                              : day.calories > day.goal
-                              ? tokens.accentOrange
-                              : tokens.accentGreen,
-                        },
-                      ]}
-                    >
-                      {overOrUnder}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-          </Card>
         </Animated.View>
 
-        {/* Milestone summary */}
-        <Animated.View entering={FadeInDown.duration(400).delay(240)}>
-          <SectionTitle
-            title="Milestones"
-            action={`${categoryCounts.unlocked}/${categoryCounts.all} unlocked`}
-            onAction={() => router.push('/milestones')}
-          />
-          <Card style={styles.milestoneCard}>
-            <View style={styles.milestoneRow}>
-              {milestones.slice(0, 4).map((badge) => (
-                <BadgeIcon
-                  key={badge.id}
-                  tier={badge.tier}
-                  iconKey={badge.iconKey as any}
-                  title={badge.title}
-                  progress={Math.max(0.3, badge.progress)}
-                  unlocked={badge.unlocked}
-                  size="sm"
-                  onPress={() => router.push(`/milestones/badge/${badge.id}`)}
-                />
-              ))}
-            </View>
-            <Button
-              title="View all milestones"
-              variant="outline"
-              onPress={() => router.push('/milestones')}
-              style={styles.viewAllButton}
+        <Animated.View entering={FadeInDown.duration(400).delay(240)} style={styles.whiteCard}>
+          <Text style={styles.lightTitle}>Weekly Energy</Text>
+          <View style={styles.energyStats}>
+            <EnergyStat label="Burned" value={energyTotals.burned} />
+            <EnergyStat label="Consumed" value={energyTotals.consumed} />
+            <EnergyStat
+              label="Energy"
+              value={energyTotals.energy}
+              signed
             />
-          </Card>
+          </View>
+          <YAxisChart
+            labels={energyAxis.labels}
+            height={CHART_HEIGHT}
+          >
+            <View style={styles.energyBars}>
+              {energyDays.map((day) => {
+                const burnedH = Math.max(8, (day.burned / energyAxis.yMax) * 159);
+                const consumedH = Math.max(8, (day.consumed / energyAxis.yMax) * 159);
+                return (
+                  <View key={day.date} style={styles.energyCol}>
+                    <View style={styles.energyPair}>
+                      <View style={[styles.energyBurned, { height: burnedH }]} />
+                      <View style={[styles.energyConsumed, { height: consumedH }]} />
+                    </View>
+                    <Text style={styles.dayTick}>{day.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </YAxisChart>
+          <View style={styles.legendRow}>
+            <LegendDot color="#FAC515" label="Burned" />
+            <LegendDot color="#16B364" label="Consumed" />
+          </View>
+          <SegmentedControl
+            options={WEEK_OFFSETS.map((item) => item.key)}
+            value={WEEK_OFFSETS[energyWeek]!.key}
+            onChange={(next) => {
+              Haptics.selectionAsync();
+              setEnergyWeek(WEEK_OFFSETS.findIndex((item) => item.key === next));
+            }}
+          />
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.duration(400).delay(280)} style={styles.darkCard}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.darkTitle}>Your BMI</Text>
+            <InfoIcon />
+          </View>
+          <View style={styles.bmiValueRow}>
+            <Text style={styles.bmiValue}>{bmi.toFixed(1)}</Text>
+            <View style={styles.bmiStatusRow}>
+              <Text style={styles.bmiStatusCopy}>your weight is </Text>
+              <View style={[styles.bmiPill, { backgroundColor: bmiMeta.pillBg }]}>
+                <Text style={[styles.bmiPillText, { color: bmiMeta.pillFg }]}>
+                  {bmiMeta.label}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.bmiTrack}>
+            <View style={[styles.bmiSegment, { backgroundColor: '#2E90FA' }]} />
+            <View style={[styles.bmiSegment, { backgroundColor: '#16B364' }]} />
+            <View style={[styles.bmiSegment, { backgroundColor: '#EAAA08' }]} />
+            <View style={[styles.bmiSegment, { backgroundColor: '#EF4444' }]} />
+            <View style={[styles.bmiMarker, { left: `${bmiMarkerPercent(bmi)}%` }]} />
+          </View>
+          <View style={styles.bmiLegend}>
+            <BmiLegend color="#2E90FA" title="Underweight" caption="<18.5" />
+            <BmiLegend color="#16B364" title="Healthy" caption="18.5-24.9" />
+            <BmiLegend color="#EAAA08" title="Overweight" caption="25.0-29.9" />
+            <BmiLegend color="#EF4444" title="Obese" caption=">30" />
+          </View>
         </Animated.View>
       </ScrollView>
 
@@ -494,7 +644,6 @@ export default function ProgressScreen() {
             keyboardType="decimal-pad"
             placeholder="e.g. 77.8"
           />
-
           <Text style={styles.modalLabel}>How did it feel?</Text>
           <View style={styles.moodRow}>
             {MOOD_OPTIONS.map((mood) => {
@@ -509,14 +658,11 @@ export default function ProgressScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Mood ${mood.label}`}
                   testID={`mood-${mood.value}`}
-                  style={({ pressed }) => [
+                  style={[
                     styles.moodChip,
                     {
-                      backgroundColor: selected
-                        ? tokens.primarySoft
-                        : tokens.card,
+                      backgroundColor: selected ? tokens.primarySoft : tokens.card,
                       borderColor: selected ? tokens.primary : tokens.border,
-                      opacity: pressed ? 0.85 : 1,
                     },
                   ]}
                 >
@@ -533,7 +679,6 @@ export default function ProgressScreen() {
               );
             })}
           </View>
-
           <Text style={styles.modalLabel}>Note (optional)</Text>
           <TextField
             value={weightNote}
@@ -541,12 +686,7 @@ export default function ProgressScreen() {
             placeholder="Energy, sleep notes…"
             multiline
           />
-
-          <Button
-            title="Save entry"
-            onPress={submitWeight}
-            style={{ marginTop: spacing.md }}
-          />
+          <Button title="Save entry" onPress={submitWeight} style={{ marginTop: spacing.md }} />
           <Button
             title="Cancel"
             variant="ghost"
@@ -560,394 +700,646 @@ export default function ProgressScreen() {
   );
 }
 
-// --- Helpers ----------------------------------------------------------------
-
-function renderGoalLine(
-  goalKg: number,
-  stats: { min: number; max: number; range: number },
-  width: number,
-  height: number,
-  pad: number,
-) {
-  if (goalKg < stats.min || goalKg > stats.max) {
-    return null;
-  }
-  const usableHeight = height - pad * 2;
-  const normalised = (goalKg - stats.min) / stats.range;
-  const y = pad + (1 - normalised) * usableHeight;
-  return (
-    <Path
-      d={`M ${pad} ${y} L ${width - pad} ${y}`}
-      stroke={tokens.accentGreen}
-      strokeDasharray="6 4"
-      strokeWidth={1.5}
-    />
-  );
-}
-
-function firstDateLabel(series: WeightEntry[]): string {
-  if (!series.length) return '';
-  return formatAxisDate(series[0]!.date);
-}
-
-function lastDateLabel(series: WeightEntry[]): string {
-  if (!series.length) return '';
-  return formatAxisDate(series[series.length - 1]!.date);
-}
-
-function formatAxisDate(date: string): string {
-  const d = new Date(date);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function HeroStat({
-  label,
-  value,
-  accent,
+function YAxisChart({
+  labels,
+  height,
+  children,
 }: {
-  label: string;
-  value: string;
-  accent?: string;
+  labels: string[];
+  height: number;
+  children: React.ReactNode;
 }) {
   return (
-    <View style={styles.heroStat}>
-      <Text style={[styles.heroStatValue, accent ? { color: accent } : null]}>
-        {value}
-      </Text>
-      <Text style={styles.heroStatLabel}>{label}</Text>
+    <View style={[styles.chart, { height }]}>
+      {labels.map((label, index) => (
+        <View key={`${label}-${index}`} style={[styles.gridRow, { top: index * 32 }]}>
+          <Text style={styles.gridLabel}>{label}</Text>
+          <View style={styles.gridLine} />
+        </View>
+      ))}
+      <View style={styles.chartPlot}>{children}</View>
     </View>
   );
 }
 
-function HeroDivider() {
-  return <View style={styles.heroDivider} />;
+function SegmentedControl({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <View style={styles.segment}>
+      {options.map((option) => {
+        const selected = option === value;
+        return (
+          <Pressable
+            key={option}
+            onPress={() => onChange(option)}
+            style={[styles.segmentItem, selected && styles.segmentItemSelected]}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            testID={`segment-${option}`}
+          >
+            <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+              {option}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 }
 
-function FeatherBadge({
-  positive,
-  delta,
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text style={styles.legendLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function EnergyStat({
+  label,
+  value,
+  signed,
+}: {
+  label: string;
+  value: number;
+  signed?: boolean;
+}) {
+  const display = signed
+    ? `${value > 0 ? '+' : ''}${Math.round(value)}`
+    : `${Math.round(value)}`;
+  return (
+    <View style={styles.energyStat}>
+      <Text style={styles.energyStatLabel}>{label}</Text>
+      <Text style={styles.energyStatValue}>
+        {display}
+        <Text style={styles.energyStatUnit}> Cal</Text>
+      </Text>
+    </View>
+  );
+}
+
+function BmiLegend({
+  color,
+  title,
   caption,
 }: {
-  positive: boolean;
-  delta: number;
+  color: string;
+  title: string;
   caption: string;
 }) {
   return (
-    <View
-      style={[
-        styles.miniBadge,
-        {
-          backgroundColor: positive
-            ? 'rgba(74,222,128,0.18)'
-            : 'rgba(255,106,26,0.2)',
-        },
-      ]}
-    >
-      <FeatherGlyph
-        name={positive ? 'arrow-down' : 'arrow-up'}
-        color={positive ? tokens.accentGreen : tokens.accentOrange}
-      />
-      <Text
-        style={[
-          styles.miniBadgeValue,
-          { color: positive ? tokens.accentGreen : tokens.accentOrange },
-        ]}
-      >
-        {Math.abs(delta).toFixed(1)}
-      </Text>
-      <Text style={styles.miniBadgeCaption}>{caption}</Text>
+    <View style={styles.bmiLegendItem}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <View>
+        <Text style={styles.bmiLegendTitle}>{title}</Text>
+        <Text style={styles.bmiLegendTitle}>{caption}</Text>
+      </View>
     </View>
   );
 }
 
-function FeatherGlyph({
-  name,
-  color,
-  size = 12,
-}: {
-  name: keyof typeof Feather.glyphMap;
-  color: string;
-  size?: number;
-}) {
-  return <Feather name={name} size={size} color={color} />;
+function ArrowRightIcon() {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+      <Path
+        d="M12.122 7.30953L8.18453 11.247C8.10244 11.3291 7.9911 11.3752 7.875 11.3752C7.7589 11.3752 7.64756 11.3291 7.56547 11.247C7.48338 11.1649 7.43726 11.0536 7.43726 10.9375C7.43726 10.8214 7.48338 10.7101 7.56547 10.628L10.7565 7.4375H2.1875C2.07147 7.4375 1.96019 7.39141 1.87814 7.30936C1.79609 7.22731 1.75 7.11603 1.75 7C1.75 6.88397 1.79609 6.77269 1.87814 6.69064C1.96019 6.60859 2.07147 6.5625 2.1875 6.5625H10.7565L7.56547 3.37203C7.48338 3.28994 7.43726 3.1786 7.43726 3.0625C7.43726 2.9464 7.48338 2.83506 7.56547 2.75297C7.64756 2.67088 7.7589 2.62476 7.875 2.62476C7.9911 2.62476 8.10244 2.67088 8.18453 2.75297L12.122 6.69047C12.1627 6.7311 12.195 6.77935 12.217 6.83246C12.239 6.88558 12.2503 6.94251 12.2503 7C12.2503 7.05749 12.239 7.11442 12.217 7.16754C12.195 7.22065 12.1627 7.2689 12.122 7.30953Z"
+        fill="#2E90FA"
+      />
+    </Svg>
+  );
 }
 
-function StatTile({
-  icon,
-  label,
-  value,
-  unit,
-  tint,
-}: {
-  icon: keyof typeof Feather.glyphMap;
-  label: string;
-  value: string;
-  unit: string;
-  tint: string;
-}) {
-  const palette = useColors();
+function InfoIcon() {
   return (
-    <Card style={styles.statTile}>
-      <View style={[styles.statIconWrap, { backgroundColor: `${tint}22` }]}>
-        <Feather name={icon} size={18} color={tint} />
-      </View>
-      <Text style={[styles.statValue, { color: palette.foreground }]}>
-        {value}
-      </Text>
-      <Text style={[styles.statUnit, { color: palette.mutedForeground }]}>
-        {unit}
-      </Text>
-      <Text style={[styles.statLabel, { color: palette.mutedForeground }]}>
-        {label}
-      </Text>
-    </Card>
+    <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+      <Path
+        d="M8.75 11.25C8.75 11.3983 8.70601 11.5433 8.6236 11.6667C8.54119 11.79 8.42406 11.8861 8.28701 11.9429C8.14997 11.9997 7.99917 12.0145 7.85368 11.9856C7.7082 11.9567 7.57456 11.8852 7.46967 11.7803C7.36478 11.6754 7.29335 11.5418 7.26441 11.3963C7.23547 11.2508 7.25032 11.1 7.30709 10.963C7.36386 10.8259 7.45999 10.7088 7.58332 10.6264C7.70666 10.544 7.85166 10.5 8 10.5C8.19891 10.5 8.38968 10.579 8.53033 10.7197C8.67098 10.8603 8.75 11.0511 8.75 11.25ZM8 4.5C6.62125 4.5 5.5 5.50937 5.5 6.75V7C5.5 7.13261 5.55268 7.25979 5.64645 7.35355C5.74021 7.44732 5.86739 7.5 6 7.5C6.13261 7.5 6.25979 7.44732 6.35355 7.35355C6.44732 7.25979 6.5 7.13261 6.5 7V6.75C6.5 6.0625 7.17313 5.5 8 5.5C8.82687 5.5 9.5 6.0625 9.5 6.75C9.5 7.4375 8.82687 8 8 8C7.86739 8 7.74021 8.05268 7.64645 8.14645C7.55268 8.24021 7.5 8.36739 7.5 8.5V9C7.5 9.13261 7.55268 9.25979 7.64645 9.35355C7.74021 9.44732 7.86739 9.5 8 9.5C8.13261 9.5 8.25979 9.44732 8.35355 9.35355C8.44732 9.25979 8.5 9.13261 8.5 9V8.955C9.64 8.74562 10.5 7.83625 10.5 6.75C10.5 5.50937 9.37875 4.5 8 4.5ZM14.5 8C14.5 9.28558 14.1188 10.5423 13.4046 11.6112C12.6903 12.6801 11.6752 13.5132 10.4874 14.0052C9.29972 14.4972 7.99279 14.6259 6.73191 14.3751C5.47104 14.1243 4.31285 13.5052 3.40381 12.5962C2.49476 11.6872 1.8757 10.529 1.6249 9.26809C1.37409 8.00721 1.50281 6.70028 1.99478 5.51256C2.48675 4.32484 3.31987 3.30968 4.38879 2.59545C5.45771 1.88122 6.71442 1.5 8 1.5C9.72335 1.50182 11.3756 2.18722 12.5942 3.40582C13.8128 4.62441 14.4982 6.27665 14.5 8ZM13.5 8C13.5 6.9122 13.1774 5.84883 12.5731 4.94436C11.9687 4.03989 11.1098 3.33494 10.1048 2.91866C9.09977 2.50238 7.9939 2.39346 6.927 2.60568C5.86011 2.8179 4.8801 3.34172 4.11091 4.11091C3.34172 4.8801 2.8179 5.86011 2.60568 6.927C2.39346 7.9939 2.50238 9.09977 2.91866 10.1048C3.33494 11.1098 4.03989 11.9687 4.94436 12.5731C5.84883 13.1774 6.9122 13.5 8 13.5C9.45818 13.4983 10.8562 12.9184 11.8873 11.8873C12.9184 10.8562 13.4983 9.45818 13.5 8Z"
+        fill="#94A3B8"
+      />
+    </Svg>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
   scroll: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 80,
+    paddingHorizontal: 20,
+    gap: 8,
   },
-  heroCard: {
-    backgroundColor: tokens.darkSurface,
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    overflow: 'hidden',
-    marginBottom: spacing.lg,
-  },
-  heroBackgroundHalo: {
-    position: 'absolute',
-    right: -56,
-    top: -56,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(21,112,239,0.18)',
+  pageTitle: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.2,
+    color: '#0F172A',
+    paddingVertical: 12,
   },
   heroRow: {
     flexDirection: 'row',
+    gap: 8,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: CARD_RADIUS,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    gap: 10,
+  },
+  illustrationWrap: {
+    width: 100,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flameImage: {
+    width: 50,
+    height: 71,
+  },
+  badgeImage: {
+    width: 70,
+    height: 70,
+  },
+  countPill: {
+    position: 'absolute',
+    bottom: 9,
+    minWidth: 24,
+    height: 24,
+    padding: 2,
+    borderRadius: 999,
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countPillText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: '#FFFFFF',
+    width: 20,
+    textAlign: 'center',
+  },
+  statCardLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#0F172A',
+    textAlign: 'center',
+    width: '100%',
+  },
+  weekDots: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
+    width: '100%',
+  },
+  weekDotCol: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  weekDotLetter: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 9,
+    lineHeight: 10,
+    color: '#64748B',
+  },
+  weekDotLetterActive: {
+    color: '#0F172A',
+  },
+  weekDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  weekDotLogged: {
+    backgroundColor: '#2E90FA',
+  },
+  weekDotToday: {
+    backgroundColor: '#2E90FA',
+  },
+  badgeDots: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    width: '100%',
+    minHeight: 28,
     alignItems: 'center',
   },
-  heroLeft: { flex: 1, gap: 6 },
-  heroEyebrow: {
-    color: 'rgba(255,255,255,0.7)',
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+  badgeDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#1570EF',
   },
-  heroWeightRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.xs,
+  darkCard: {
+    backgroundColor: '#0A0A0A',
+    borderRadius: CARD_RADIUS,
+    padding: 16,
+    gap: 16,
   },
-  heroWeight: {
-    color: tokens.textInverse,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 44,
-    letterSpacing: -1.2,
+  whiteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: CARD_RADIUS,
+    padding: 16,
+    gap: 10,
   },
-  heroUnit: {
-    color: 'rgba(255,255,255,0.6)',
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-  },
-  heroDeltaRow: { marginTop: spacing.xs },
-  miniBadge: {
+  cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    alignSelf: 'flex-start',
+    gap: 2,
   },
-  miniBadgeValue: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13,
-  },
-  miniBadgeCaption: {
-    color: 'rgba(255,255,255,0.7)',
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-  },
-  heroCaption: {
-    color: 'rgba(255,255,255,0.6)',
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    marginTop: 8,
-  },
-  heroRingPct: {
-    color: tokens.textInverse,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    letterSpacing: -0.6,
-  },
-  heroRingSub: {
-    color: 'rgba(255,255,255,0.6)',
+  darkTitle: {
+    flex: 1,
     fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: '#FFFFFF',
+  },
+  lightTitle: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: '#0F172A',
+  },
+  darkChip: {
+    backgroundColor: '#1E293B',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  darkChipText: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 10,
-    marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    lineHeight: 12,
+    color: '#FFFFFF',
   },
-  heroFooter: {
+  lightChip: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  lightChipText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#64748B',
+  },
+  lightChipStrong: {
+    color: '#0F172A',
+  },
+  weightTrack: {
+    height: 8,
+    width: '100%',
+    backgroundColor: '#1E293B',
+    justifyContent: 'center',
+  },
+  weightFill: {
+    height: 8,
+    backgroundColor: '#1570EF',
+  },
+  weightThumb: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    marginLeft: -8,
+    top: -4,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#1570EF',
+  },
+  weightMetaRow: {
+    flexDirection: 'row',
+    width: '100%',
+  },
+  weightMeta: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  weightMetaRight: {
+    textAlign: 'right',
+  },
+  weightMetaMuted: {
+    color: '#64748B',
+  },
+  chart: {
+    width: '100%',
+    overflow: 'hidden',
+  },
+  gridRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    gap: 8,
+    paddingVertical: 8,
   },
-  heroStat: {
-    alignItems: 'flex-start',
+  gridLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#64748B',
+    minWidth: 22,
+    textAlign: 'right',
+  },
+  gridLine: {
+    flex: 1,
+    height: 1,
+    borderStyle: 'dashed',
+    borderWidth: 0.5,
+    borderColor: '#E2E8F0',
+  },
+  chartPlot: {
+    position: 'absolute',
+    left: 26,
+    right: 0,
+    bottom: 0,
+    top: 16,
+  },
+  weightBars: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 8,
+    paddingBottom: 16,
+  },
+  weightBar: {
+    flex: 1,
+    backgroundColor: '#1570EF',
+  },
+  segment: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 999,
+    padding: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  segmentItem: {
+    flex: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentItemSelected: {
+    backgroundColor: '#FFFFFF',
+  },
+  segmentText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#64748B',
+  },
+  segmentTextSelected: {
+    color: '#0F172A',
+  },
+  changeList: {
+    gap: 0,
+  },
+  changeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  changePeriod: {
+    width: 56,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#64748B',
+  },
+  changeFrom: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#0F172A',
+  },
+  changeTo: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#0F172A',
+  },
+  heroMetric: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.2,
+    color: '#0F172A',
+    width: '100%',
+  },
+  heroMetricUnit: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#64748B',
+  },
+  stackedBars: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingBottom: 0,
+  },
+  stackedCol: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
+  stackedStack: {
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
+  stackFat: { width: '100%', backgroundColor: '#EF6820' },
+  stackCarbs: { width: '100%', backgroundColor: '#1570EF' },
+  stackProtein: { width: '100%', backgroundColor: '#DC2626' },
+  dayTick: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#475569',
+  },
+  legendRow: {
+    flexDirection: 'row',
+    gap: 16,
+    justifyContent: 'center',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#0F172A',
+  },
+  energyStats: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  energyStat: {
     flex: 1,
     gap: 2,
   },
-  heroStatValue: {
-    color: tokens.textInverse,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 17,
-  },
-  heroStatLabel: {
-    color: 'rgba(255,255,255,0.6)',
+  energyStatLabel: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#64748B',
   },
-  heroDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    marginHorizontal: spacing.sm,
+  energyStatValue: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: '#0F172A',
   },
-  chartCard: {
-    marginBottom: spacing.lg,
+  energyStatUnit: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#64748B',
   },
-  chartHeader: {
+  energyBars: {
+    flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginBottom: spacing.md,
+    gap: 8,
   },
-  chartLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: tokens.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  chartValue: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 24,
-    color: tokens.textPrimary,
-    letterSpacing: -0.5,
-    marginTop: 2,
-  },
-  chartDelta: { alignItems: 'flex-end' },
-  chartAxis: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
-  },
-  chartAxisText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    color: tokens.textMuted,
-  },
-  statGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  statTile: {
-    flexGrow: 1,
-    flexBasis: '47%',
-    paddingVertical: spacing.md,
+  energyCol: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 4,
   },
-  statIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  statValue: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    letterSpacing: -0.4,
-  },
-  statUnit: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  statLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    marginTop: spacing.xxs,
-  },
-  calorieCard: {
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
-  },
-  calorieRow: {
+  energyPair: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  calorieDayLabel: {
-    width: 56,
-  },
-  calorieDay: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: tokens.textPrimary,
-  },
-  calorieDate: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10,
-    color: tokens.textMuted,
-    letterSpacing: 0.4,
-  },
-  calorieBarTrack: {
+    alignItems: 'flex-end',
+    width: '100%',
     flex: 1,
   },
-  calorieNumeric: {
-    width: 76,
-    alignItems: 'flex-end',
+  energyBurned: {
+    flex: 1,
+    backgroundColor: '#EAAA08',
   },
-  calorieValue: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: tokens.textPrimary,
+  energyConsumed: {
+    flex: 1,
+    backgroundColor: '#16B364',
   },
-  calorieDelta: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  milestoneCard: {
-    gap: spacing.md,
-  },
-  milestoneRow: {
+  bmiValueRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xs,
+    alignItems: 'flex-end',
+    gap: 8,
   },
-  viewAllButton: {
-    marginTop: 0,
+  bmiValue: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.2,
+    color: '#FFFFFF',
+  },
+  bmiStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingBottom: 6,
+  },
+  bmiStatusCopy: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#64748B',
+  },
+  bmiPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  bmiPillText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
+  },
+  bmiTrack: {
+    flexDirection: 'row',
+    gap: 2,
+    height: 8,
+    width: '100%',
+  },
+  bmiSegment: {
+    flex: 1,
+    height: 8,
+  },
+  bmiMarker: {
+    position: 'absolute',
+    top: -4,
+    width: 1,
+    height: 16,
+    backgroundColor: '#F1F5F9',
+    marginLeft: -0.5,
+  },
+  bmiLegend: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  bmiLegendItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  bmiLegendTitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#FFFFFF',
   },
   modalBody: {
     paddingVertical: spacing.sm,
@@ -975,9 +1367,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     gap: 4,
   },
-  moodEmoji: {
-    fontSize: 22,
-  },
+  moodEmoji: { fontSize: 22 },
   moodLabel: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,

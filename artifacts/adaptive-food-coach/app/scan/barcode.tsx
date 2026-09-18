@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -10,26 +10,42 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import type { CameraView } from 'expo-camera';
 import { Button, Header } from '@/components/ui';
+import { LiveCamera } from '@/components/scan/LiveCamera';
 import { colors, radii, spacing } from '@/constants/tokens';
+import {
+  SCAN_BARCODE_FALLBACK_ID,
+  resolveBarcodeFoodId,
+  resolveQueryFoodId,
+} from '@/constants/scanLookup';
+import { useAppStore } from '@/hooks/useAppStore';
 
-/**
- * Mock barcode scanner screen.
- *
- * Renders a dark viewfinder with a horizontal-stripe reticle and
- * supports manual lookup by entering a barcode (or product name).
- * A real scanner module is not yet wired in — the screen exists so
- * the barcode -> result flow can be exercised end-to-end.
- */
 export default function BarcodeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const cameraRef = useRef<CameraView>(null);
+  const lock = useRef(false);
+  const { state } = useAppStore();
   const [query, setQuery] = useState('');
   const [flashOn, setFlashOn] = useState(false);
 
+  const openResult = (foodId: string) => {
+    router.push({ pathname: '/scan/result/[foodId]', params: { foodId } });
+  };
+
+  const handleScanned = (data: string) => {
+    if (lock.current) return;
+    lock.current = true;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    openResult(resolveBarcodeFoodId(data) ?? SCAN_BARCODE_FALLBACK_ID);
+  };
+
   const handleSearch = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/scan/result/fd_blueberries');
+    openResult(
+      resolveQueryFoodId(query, state.foodDatabase) ?? SCAN_BARCODE_FALLBACK_ID,
+    );
   };
 
   return (
@@ -40,42 +56,30 @@ export default function BarcodeScreen() {
         rightIcon={flashOn ? 'zap' : 'zap-off'}
         onRightPress={() => {
           Haptics.selectionAsync();
-          setFlashOn((v) => !v);
+          setFlashOn((value) => !value);
         }}
       />
 
       <View style={styles.viewfinderWrap} testID="barcode-viewfinder">
         <View style={styles.viewfinder}>
-          <View style={styles.viewfinderShade} />
-          <View style={styles.viewfinderShadeAlt} />
-
-          {/* Horizontal barcode window */}
-          <View style={styles.barcodeWindow}>
-            <View style={styles.barcodeStripeRow}>
-              {[3, 6, 2, 8, 4, 5, 2, 7, 3, 5, 4, 2, 6, 3, 4, 5, 2, 3, 6, 4, 2, 5, 3, 4, 6].map(
-                (w, idx) => (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.barcodeStripe,
-                      { width: w, backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#1B1B1F' },
-                    ]}
-                  />
-                ),
-              )}
+          <LiveCamera
+            ref={cameraRef}
+            torch={flashOn}
+            scanBarcodes
+            onBarcodeScanned={({ data }) => handleScanned(data)}
+          >
+            <View style={styles.barcodeWindow} pointerEvents="none">
+              <View style={styles.scanLine} />
             </View>
-            <View style={styles.scanLine} />
-          </View>
-
-          {/* Corner brackets */}
-          <View style={[styles.corner, styles.cornerTL]} />
-          <View style={[styles.corner, styles.cornerTR]} />
-          <View style={[styles.corner, styles.cornerBL]} />
-          <View style={[styles.corner, styles.cornerBR]} />
+            <View style={[styles.corner, styles.cornerTL]} />
+            <View style={[styles.corner, styles.cornerTR]} />
+            <View style={[styles.corner, styles.cornerBL]} />
+            <View style={[styles.corner, styles.cornerBR]} />
+          </LiveCamera>
         </View>
 
         <Text style={styles.helper}>
-          Center the barcode inside the frame. We&apos;ll match it to our food
+          Center the barcode inside the frame. We’ll match it to our food
           database automatically.
         </Text>
       </View>
@@ -140,44 +144,21 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     overflow: 'hidden',
     backgroundColor: '#111113',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  viewfinderShade: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: '#1B1B1F',
-  },
-  viewfinderShadeAlt: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   barcodeWindow: {
-    width: '78%',
+    position: 'absolute',
+    left: '11%',
+    right: '11%',
+    top: '32%',
     height: 160,
-    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: radii.md,
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  barcodeStripeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 110,
-    paddingHorizontal: spacing.md,
-    gap: 2,
-  },
-  barcodeStripe: {
-    height: '100%',
-    borderRadius: 1,
   },
   scanLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
     height: 2,
     backgroundColor: '#4ADE80',
-    top: '50%',
   },
   corner: {
     position: 'absolute',

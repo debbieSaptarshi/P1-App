@@ -1,6 +1,5 @@
 import { router } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -8,523 +7,359 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import { CircleIconButton } from '@/components/meals/CircleIconButton';
+import { GROUP_AVATARS } from '@/constants/groupsCatalog';
 import { colors, radii, spacing } from '@/constants/tokens';
-import { Button, Card, Header, SectionTitle } from '@/components/ui';
 import { appStoreActions, useAppStore } from '@/hooks/useAppStore';
-import type { Challenge, GroupPost, LeaderboardEntry } from '@/types';
+import type { AccountabilityGroup } from '@/types';
 
-type Segment = 'feed' | 'leaderboard' | 'challenges';
-
-const SEGMENTS: { key: Segment; label: string; icon: keyof typeof Feather.glyphMap }[] = [
-  { key: 'feed', label: 'Feed', icon: 'message-circle' },
-  { key: 'leaderboard', label: 'Leaderboard', icon: 'bar-chart-2' },
-  { key: 'challenges', label: 'Challenges', icon: 'zap' },
-];
+const iconBell = require('@/assets/images/groups/icon-bell.svg');
+const iconPlusPrivate = require('@/assets/images/groups/icon-plus-private.svg');
+const iconPlusJoin = require('@/assets/images/groups/icon-plus-join.svg');
 
 /**
- * Community tab landing with a segmented pill that toggles between
- * Feed / Leaderboard / Challenges. Each segment is rendered inline
- * (no second navigation push) backed by `useAppStore`.
+ * Groups tab — Figma “Group / Your Group” (6128:8510).
+ *
+ * Your Groups lists joined communities; Discover lists the rest with a
+ * join control. The tab bar is owned by `(tabs)/_layout` (not rebuilt).
  */
 export default function CommunityScreen() {
   const insets = useSafeAreaInsets();
   const { state } = useAppStore();
-  const [segment, setSegment] = useState<Segment>('feed');
 
-  const joinedGroupIds = useMemo(
-    () => new Set(state.groups.filter((g) => g.joined).map((g) => g.id)),
+  const yourGroups = useMemo(
+    () => state.groups.filter((group) => group.joined),
+    [state.groups],
+  );
+  const discoverGroups = useMemo(
+    () => state.groups.filter((group) => !group.joined),
     [state.groups],
   );
 
-  const myRank = useMemo(() => {
-    return state.leaderboard.find(
-      (l) => l.displayName === state.profile.name || l.userId === state.profile.id,
-    )?.rank;
-  }, [state.leaderboard, state.profile]);
+  const openActivity = () => {
+    const withUnread = yourGroups.find((group) => (group.unreadCount ?? 0) > 0);
+    const target = withUnread ?? yourGroups[0];
+    if (target) {
+      router.push(`/group/${target.id}`);
+      return;
+    }
+    router.push('/group');
+  };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <Header title="Community" subtitle="Stay accountable together" />
-
-      {/* Segmented pill */}
-      <View style={styles.segmentRow}>
-        {SEGMENTS.map((seg) => {
-          const isActive = seg.key === segment;
-          return (
-            <Pressable
-              key={seg.key}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-              testID={`community-segment-${seg.key}`}
-              onPress={() => setSegment(seg.key)}
-              style={({ pressed }) => [
-                styles.segment,
-                isActive && styles.segmentActive,
-                pressed && styles.segmentPressed,
-              ]}
-            >
-              <Feather
-                name={seg.icon}
-                size={14}
-                color={isActive ? colors.textInverse : colors.textMuted}
-              />
-              <Text
-                style={[
-                  styles.segmentLabel,
-                  isActive && styles.segmentLabelActive,
-                ]}
-              >
-                {seg.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
+    <View style={styles.root}>
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingBottom: insets.bottom + spacing.xxxl,
+          paddingTop: insets.top + spacing.xs,
+          paddingBottom: insets.bottom + 120,
         }}
         showsVerticalScrollIndicator={false}
       >
-        {segment === 'feed' && (
-          <Feed posts={state.groupPosts} joinedGroupIds={joinedGroupIds} />
-        )}
-        {segment === 'leaderboard' && (
-          <Leaderboard entries={state.leaderboard} myRank={myRank} />
-        )}
-        {segment === 'challenges' && <Challenges challenges={state.challenges} />}
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>Groups</Text>
+          <CircleIconButton
+            source={iconBell}
+            accessibilityLabel="Group notifications"
+            testID="groups-bell"
+            onPress={openActivity}
+          />
+        </View>
 
-        <Button
-          variant="outline"
-          title="Find groups"
-          leadingIcon="search"
-          trailingIcon="arrow-right"
-          onPress={() => router.push('/group')}
-          style={styles.findCta}
-          testID="community-find-groups"
-        />
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Your Groups</Text>
+        </View>
+        <View style={styles.list}>
+          {yourGroups.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>No groups yet</Text>
+              <Text style={styles.emptyBody}>
+                Join a group below to see it here.
+              </Text>
+            </View>
+          ) : (
+            yourGroups.map((group) => (
+              <GroupCard key={group.id} group={group} variant="joined" />
+            ))
+          )}
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Discover Groups</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Private group"
+            testID="groups-private"
+            onPress={() => router.push('/group')}
+            style={({ pressed }) => [styles.privateBtn, pressed && styles.pressed]}
+          >
+            <View style={styles.privateIconBox}>
+              <Image
+                source={iconPlusPrivate}
+                style={styles.privateIcon}
+                contentFit="contain"
+              />
+            </View>
+            <Text style={styles.privateLabel}>Private Group</Text>
+          </Pressable>
+        </View>
+        <View style={styles.list}>
+          {discoverGroups.map((group) => (
+            <GroupCard key={group.id} group={group} variant="discover" />
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-interface FeedProps {
-  posts: GroupPost[];
-  joinedGroupIds: Set<string>;
+function formatMembers(count: number): string {
+  return `${count.toLocaleString()} ${count === 1 ? 'Member' : 'Members'}`;
 }
 
-function Feed({ posts, joinedGroupIds }: FeedProps) {
-  const visible = posts.filter((p) => joinedGroupIds.has(p.groupId));
-  if (visible.length === 0) {
-    return (
-      <Card style={styles.emptyCard}>
-        <Feather name="message-circle" size={24} color={colors.textMuted} />
-        <Text style={styles.emptyTitle}>No posts yet</Text>
-        <Text style={styles.emptyBody}>
-          Join an accountability group to see its daily feed here.
-        </Text>
-      </Card>
-    );
-  }
+function formatUnread(count: number): string {
+  return count > 9 ? '9+' : String(count);
+}
+
+function GroupCard({
+  group,
+  variant,
+}: {
+  group: AccountabilityGroup;
+  variant: 'joined' | 'discover';
+}) {
+  const avatar = GROUP_AVATARS[group.id];
+  const unread = group.unreadCount ?? 0;
+
+  const join = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    appStoreActions.joinGroup(group.id);
+  };
+
   return (
-    <View style={styles.feedWrap}>
-      <SectionTitle title="Activity" />
-      {visible.map((post) => (
-        <PostRow key={post.id} post={post} />
-      ))}
-    </View>
-  );
-}
-
-function PostRow({ post }: { post: GroupPost }) {
-  return (
-    <Card style={styles.postCard}>
-      <View style={styles.postHeader}>
-        <View style={styles.postAuthor}>
-          <View style={styles.postAvatar}>
-            <Feather name="user" size={14} color={colors.textPrimary} />
-          </View>
-          <View>
-            <Text style={styles.postAuthorName}>{post.authorName}</Text>
-            <Text style={styles.postMeta}>{relTime(post.createdAt)}</Text>
-          </View>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open post"
-          testID={`post-open-${post.id}`}
-          onPress={() => router.push(`/group/post/${post.id}`)}
-          style={styles.postOpen}
-        >
-          <Feather name="chevron-right" size={16} color={colors.textMuted} />
-        </Pressable>
-      </View>
-      <Text style={styles.postBody} numberOfLines={3}>{post.body}</Text>
-      <View style={styles.postActions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={post.liked ? 'Unlike' : 'Like'}
-          accessibilityState={{ selected: !!post.liked }}
-          testID={`post-like-${post.id}`}
-          onPress={() => appStoreActions.likePost(post.id)}
-          style={({ pressed }) => [styles.actionChip, pressed && styles.actionChipPressed]}
-        >
-          <Feather
-            name={post.liked ? 'heart' : 'heart'}
-            size={14}
-            color={post.liked ? colors.accentRed : colors.primary}
-          />
-          <Text style={[styles.actionLabel, post.liked && styles.actionLabelActive]}>
-            {post.reactions}
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Comment"
-          testID={`post-comment-${post.id}`}
-          onPress={() => router.push(`/group/post/${post.id}`)}
-          style={({ pressed }) => [styles.actionChip, pressed && styles.actionChipPressed]}
-        >
-          <Feather name="message-square" size={14} color={colors.textMuted} />
-          <Text style={styles.actionLabel}>{post.comments}</Text>
-        </Pressable>
-        <View style={{ flex: 1 }} />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Share"
-          testID={`post-share-${post.id}`}
-          onPress={() => {
-            if (__DEV__) console.log('[community] share', post.id);
-          }}
-          style={({ pressed }) => [styles.actionChip, pressed && styles.actionChipPressed]}
-        >
-          <Feather name="share-2" size={14} color={colors.textMuted} />
-        </Pressable>
-      </View>
-    </Card>
-  );
-}
-
-interface LeaderboardProps {
-  entries: LeaderboardEntry[];
-  myRank?: number;
-}
-
-function Leaderboard({ entries, myRank }: LeaderboardProps) {
-  return (
-    <View style={styles.feedWrap}>
-      <SectionTitle
-        title="Top Performers"
-        action={myRank ? `You’re #${myRank}` : undefined}
-      />
-      {entries.map((entry) => {
-        const highlight = entry.rank === myRank || entry.highlight;
-        return (
-          <Card
-            key={entry.userId}
-            style={highlight ? { ...styles.rankRow, ...styles.rankRowHighlight } : styles.rankRow}
-          >
-            <View style={[styles.rankBadge, highlight && styles.rankBadgeHighlight]}>
-              <Text style={[styles.rankNumber, highlight && styles.rankNumberHighlight]}>
-                {entry.rank}
-              </Text>
-            </View>
-            <View style={styles.rankNameWrap}>
-              <Text style={styles.rankName}>{entry.displayName}</Text>
-              <Text style={styles.rankHint}>{entry.score.toLocaleString()} kcal — 30 days</Text>
-            </View>
-            {highlight && (
-              <View style={styles.youPill}>
-                <Text style={styles.youPillText}>You</Text>
-              </View>
-            )}
-          </Card>
-        );
-      })}
-    </View>
-  );
-}
-
-function Challenges({ challenges }: { challenges: Challenge[] }) {
-  return (
-    <View style={styles.feedWrap}>
-      <SectionTitle title="Active Challenges" />
-      {challenges.map((c) => (
-        <Card key={c.id} style={styles.challengeCard}>
-          <View style={styles.challengeHeader}>
-            <View>
-              <Text style={styles.challengeTitle}>{c.title}</Text>
-              <Text style={styles.challengeDescription}>{c.description}</Text>
-            </View>
-            {c.joined && (
-              <View style={styles.joinedPill}>
-                <Text style={styles.joinedPillText}>Joined</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.challengeMeta}>
-            <Feather name="users" size={12} color={colors.textMuted} />
-            <Text style={styles.challengeMetaText}>
-              {c.participants.toLocaleString()} participants
-            </Text>
-            <Feather name="clock" size={12} color={colors.textMuted} style={{ marginLeft: spacing.sm }} />
-            <Text style={styles.challengeMetaText}>{c.daysRemaining} days left</Text>
-          </View>
-          <View style={styles.challengeRewardRow}>
-            <Feather name="award" size={14} color={colors.accentOrange} />
-            <Text style={styles.challengeReward}>Reward: {c.reward}</Text>
-          </View>
-          {!c.joined && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Join ${c.title}`}
-              testID={`challenge-join-${c.id}`}
-              onPress={() => appStoreActions.joinChallenge(c.id)}
-              style={({ pressed }) => [styles.joinBtn, pressed && styles.joinBtnPressed]}
-            >
-              <Text style={styles.joinBtnLabel}>Join challenge</Text>
-            </Pressable>
+    <View style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${group.name}`}
+        testID={`group-open-${group.id}`}
+        onPress={() => router.push(`/group/${group.id}`)}
+        style={({ pressed }) => [styles.cardMain, pressed && styles.pressed]}
+      >
+        <View style={styles.avatarBox}>
+          {avatar ? (
+            <Image source={avatar} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]} />
           )}
-        </Card>
-      ))}
+        </View>
+        <View style={styles.info}>
+          <View style={styles.titleBlock}>
+            <Text style={styles.groupName} numberOfLines={1}>
+              {group.name}
+            </Text>
+            <Text style={styles.memberCount}>{formatMembers(group.members)}</Text>
+          </View>
+          <Text style={styles.caption} numberOfLines={2}>
+            {group.description}
+          </Text>
+        </View>
+        {variant === 'joined' && unread > 0 ? (
+          <View style={styles.unreadBadge} testID={`group-unread-${group.id}`}>
+            <Text style={styles.unreadLabel}>{formatUnread(unread)}</Text>
+          </View>
+        ) : null}
+      </Pressable>
+      {variant === 'discover' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Join ${group.name}`}
+          testID={`group-toggle-${group.id}`}
+          onPress={join}
+          hitSlop={8}
+          style={({ pressed }) => [styles.joinBtn, pressed && styles.pressed]}
+        >
+          <View style={styles.joinIconBox}>
+            <Image
+              source={iconPlusJoin}
+              style={styles.joinIcon}
+              contentFit="contain"
+            />
+          </View>
+        </Pressable>
+      ) : null}
     </View>
   );
-}
-
-function relTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return iso;
-  const diff = Math.max(0, Date.now() - then);
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  segmentRow: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    backgroundColor: colors.card,
-    padding: 4,
-    borderRadius: radii.pill,
-    gap: 4,
-  },
-  segment: {
+  root: {
     flex: 1,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.pill,
-    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  pageHeader: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.md,
+  },
+  pageTitle: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.2,
+    color: colors.textPrimary,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.md,
+  },
+  sectionTitle: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 20,
+    lineHeight: 24,
+    color: colors.textPrimary,
+  },
+  privateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  privateIconBox: {
+    width: 16,
+    height: 16,
+  },
+  privateIcon: {
+    width: 16,
+    height: 16,
+  },
+  privateLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: colors.textMuted,
+    textAlign: 'right',
+  },
+  list: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.card,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  cardMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  avatarBox: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    overflow: 'hidden',
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  avatarFallback: {
+    backgroundColor: colors.border,
+  },
+  info: {
+    flex: 1,
+    minWidth: 0,
     gap: spacing.xxs,
   },
-  segmentActive: {
-    backgroundColor: colors.darkSurface,
+  titleBlock: {
+    gap: 2,
   },
-  segmentPressed: { opacity: 0.85 },
-  segmentLabel: {
+  groupName: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: colors.textPrimary,
+  },
+  memberCount: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: -0.16,
+    color: colors.textPrimary,
+  },
+  caption: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
     color: colors.textMuted,
   },
-  segmentLabelActive: {
+  unreadBadge: {
+    backgroundColor: colors.darkSurface,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xxs,
+    overflow: 'hidden',
+  },
+  unreadLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
     color: colors.textInverse,
   },
-  feedWrap: { marginBottom: spacing.lg },
-  emptyCard: { alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.lg },
+  joinBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.darkSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  joinIconBox: {
+    width: 16,
+    height: 16,
+  },
+  joinIcon: {
+    width: 16,
+    height: 16,
+  },
+  emptyCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: spacing.xxs,
+  },
   emptyTitle: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_500Medium',
     fontSize: 16,
+    lineHeight: 22,
     color: colors.textPrimary,
   },
   emptyBody: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
-    maxWidth: 280,
-  },
-  postCard: { marginBottom: spacing.sm },
-  postHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  postAuthor: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  postAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  postAuthorName: {
-    fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
-    color: colors.textPrimary,
-  },
-  postMeta: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    lineHeight: 20,
     color: colors.textMuted,
   },
-  postOpen: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  postBody: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    color: colors.textPrimary,
-    lineHeight: 21,
-    marginBottom: spacing.sm,
-  },
-  postActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  actionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 4,
-    borderRadius: radii.pill,
-    backgroundColor: colors.background,
-  },
-  actionChipPressed: { opacity: 0.7 },
-  actionLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  actionLabelActive: { color: colors.accentRed },
-  rankRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  rankRowHighlight: { borderWidth: 1.5, borderColor: colors.primary },
-  rankBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankBadgeHighlight: { backgroundColor: colors.primarySoft },
-  rankNumber: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  rankNumberHighlight: { color: colors.primary },
-  rankNameWrap: { flex: 1 },
-  rankName: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  rankHint: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  youPill: {
-    paddingVertical: 2,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primary,
-  },
-  youPillText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    color: colors.textInverse,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  challengeCard: { marginBottom: spacing.sm },
-  challengeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-  },
-  challengeTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  challengeDescription: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
-  joinedPill: {
-    paddingVertical: 2,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radii.pill,
-    backgroundColor: colors.accentGreen,
-  },
-  joinedPillText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    color: colors.textInverse,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  challengeMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginVertical: spacing.xs,
-  },
-  challengeMetaText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  challengeRewardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-    marginBottom: spacing.xs,
-  },
-  challengeReward: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
-  joinBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primary,
-  },
-  joinBtnPressed: { opacity: 0.85 },
-  joinBtnLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: colors.textInverse,
-  },
-  findCta: { marginTop: spacing.md },
+  pressed: { opacity: 0.85 },
 });

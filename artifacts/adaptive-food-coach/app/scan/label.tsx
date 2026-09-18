@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -9,24 +9,42 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import type { CameraView } from 'expo-camera';
 import { Header } from '@/components/ui';
-import { colors, radii, spacing } from '@/constants/tokens';
+import { LiveCamera } from '@/components/scan/LiveCamera';
+import { SCAN_LABEL_FALLBACK_ID } from '@/constants/scanLookup';
+import { radii, spacing } from '@/constants/tokens';
 
-/**
- * Mock "scan nutrition label" screen.
- *
- * Renders a dark viewfinder with a nutrition-facts card overlay so
- * the user can align the label of a packaged food within the frame.
- * Capturing routes to the matching result page so the label -> result
- * flow can be exercised.
- */
 export default function LabelScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const cameraRef = useRef<CameraView>(null);
+  const [flashOn, setFlashOn] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
-  const handleCapture = () => {
+  const handleCapture = async () => {
+    if (capturing) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('/scan/result/fd_greek_yogurt');
+    setCapturing(true);
+    try {
+      const photo = await cameraRef.current?.takePictureAsync({
+        quality: 0.7,
+        skipProcessing: true,
+      });
+      router.push({
+        pathname: '/scan/result/[foodId]',
+        params: photo?.uri
+          ? { foodId: SCAN_LABEL_FALLBACK_ID, photoUri: photo.uri }
+          : { foodId: SCAN_LABEL_FALLBACK_ID },
+      });
+    } catch {
+      router.push({
+        pathname: '/scan/result/[foodId]',
+        params: { foodId: SCAN_LABEL_FALLBACK_ID },
+      });
+    } finally {
+      setCapturing(false);
+    }
   };
 
   return (
@@ -34,33 +52,22 @@ export default function LabelScreen() {
       <Header
         transparent
         title="Scan label"
-        rightIcon="zap-off"
-        onRightPress={() => Haptics.selectionAsync()}
+        rightIcon={flashOn ? 'zap' : 'zap-off'}
+        onRightPress={() => {
+          Haptics.selectionAsync();
+          setFlashOn((value) => !value);
+        }}
       />
 
       <View style={styles.viewfinderWrap} testID="label-viewfinder">
         <View style={styles.viewfinder}>
-          <View style={styles.viewfinderShade} />
-          <View style={styles.viewfinderShadeAlt} />
-
-          {/* Nutrition facts placeholder card */}
-          <View style={styles.labelCard}>
-            <Text style={styles.labelTitle}>Nutrition Facts</Text>
-            <View style={styles.labelDivider} />
-            <LabelRow label="Serving size" value="170 g" />
-            <LabelRow label="Calories" value="100" />
-            <View style={styles.labelDivider} />
-            <LabelRow label="Total Fat" value="0.7 g" />
-            <LabelRow label="Sodium" value="61 mg" />
-            <LabelRow label="Total Carbs" value="6 g" />
-            <LabelRow label="Protein" value="17 g" />
-          </View>
-
-          {/* Corner brackets */}
-          <View style={[styles.corner, styles.cornerTL]} />
-          <View style={[styles.corner, styles.cornerTR]} />
-          <View style={[styles.corner, styles.cornerBL]} />
-          <View style={[styles.corner, styles.cornerBR]} />
+          <LiveCamera ref={cameraRef} torch={flashOn}>
+            <View style={styles.labelGuide} pointerEvents="none" />
+            <View style={[styles.corner, styles.cornerTL]} />
+            <View style={[styles.corner, styles.cornerTR]} />
+            <View style={[styles.corner, styles.cornerBL]} />
+            <View style={[styles.corner, styles.cornerBR]} />
+          </LiveCamera>
         </View>
 
         <Text style={styles.helper}>
@@ -86,22 +93,17 @@ export default function LabelScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Capture label"
+          accessibilityState={{ disabled: capturing }}
           testID="label-capture"
-          onPress={handleCapture}
+          disabled={capturing}
+          onPress={() => {
+            void handleCapture();
+          }}
           style={({ pressed }) => [styles.shutterOuter, pressed && styles.pressed]}
         >
           <View style={styles.shutterInner} />
         </Pressable>
       </View>
-    </View>
-  );
-}
-
-function LabelRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.labelRow}>
-      <Text style={styles.labelRowLabel}>{label}</Text>
-      <Text style={styles.labelRowValue}>{value}</Text>
     </View>
   );
 }
@@ -122,48 +124,16 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     overflow: 'hidden',
     backgroundColor: '#111113',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  viewfinderShade: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: '#1B1B1F',
-  },
-  viewfinderShadeAlt: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  labelCard: {
-    width: '70%',
-    backgroundColor: '#FFFFFF',
+  labelGuide: {
+    position: 'absolute',
+    left: '12%',
+    right: '12%',
+    top: '18%',
+    bottom: '18%',
     borderRadius: radii.md,
-    padding: spacing.md,
-  },
-  labelTitle: {
-    fontFamily: 'Inter_700Bold',
-    color: '#0A0A0A',
-    fontSize: 16,
-    marginBottom: spacing.xs,
-  },
-  labelDivider: {
-    height: 1,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    marginVertical: spacing.xs,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 2,
-  },
-  labelRowLabel: {
-    fontFamily: 'Inter_500Medium',
-    color: '#0A0A0A',
-    fontSize: 12,
-  },
-  labelRowValue: {
-    fontFamily: 'Inter_600SemiBold',
-    color: '#0A0A0A',
-    fontSize: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   corner: {
     position: 'absolute',

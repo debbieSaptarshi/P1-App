@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Dimensions,
   Image,
@@ -12,44 +12,141 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
+import { useAppStore } from '@/hooks/useAppStore';
 import { Feather } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { LAST_MEALS, type LastMealDish } from '@/constants/lastMeals';
 
 const { width } = Dimensions.get('window');
 const MEAL_CARD_WIDTH = 250;
 const MEAL_CARD_GAP = 16;
 const DASHBOARD_CAROUSEL_SIDE_INSET = 20;
-const HEALTH_SCORE_PAGE_INSET = 2;
 const PAGE_WIDTH = width - DASHBOARD_CAROUSEL_SIDE_INSET * 2;
+const SUGAR_GOAL_G = 50;
+const WATER_STEP_ML = 50;
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
-const meals = [
-  { id: '1', name: 'Roasted Chicken with Vegetable', calories: 637, protein: 65, carbs: 45, fat: 18 },
-  { id: '2', name: 'Protein Bowl with Greens', calories: 518, protein: 48, carbs: 39, fat: 16 },
-  { id: '3', name: 'Salmon with Roasted Vegetables', calories: 584, protein: 54, carbs: 32, fat: 22 },
-];
+const meals = LAST_MEALS;
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function currentWeekDays() {
+  const start = new Date();
+  start.setHours(12, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay());
+  return WEEKDAY_LABELS.map((day, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return {
+      day,
+      num: String(date.getDate()),
+      iso: isoDate(date),
+    };
+  });
+}
+
+function greetingForNow(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good Morning';
+  if (hour < 17) return 'Good Afternoon';
+  return 'Good Evening';
+}
+
+function remaining(goal: number, consumed: number): number {
+  return Math.max(0, goal - consumed);
+}
+
+function progressPct(consumed: number, goal: number): number {
+  if (goal <= 0) return 0;
+  return Math.max(0, Math.min(100, (consumed / goal) * 100));
+}
+
+function formatSteps(value: number): string {
+  if (value >= 1000) return (value / 1000).toFixed(3);
+  return value.toLocaleString();
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
+  const router = useRouter();
+  const { state, streakDays, foodLogForDate, actions } = useAppStore();
+  const profile = state.profile;
+  const days = useMemo(() => currentWeekDays(), []);
+  const todayIso = isoDate(new Date());
 
-  const [selectedDay, setSelectedDay] = useState('23');
+  const [selectedIso, setSelectedIso] = useState(todayIso);
   const [activeMeal, setActiveMeal] = useState(0);
   const [activePage, setActivePage] = useState(0);
-  const [waterIntake, setWaterIntake] = useState(1.2);
 
-  const days = [
-    { day: 'Sun', num: '18' },
-    { day: 'Mon', num: '19' },
-    { day: 'Tue', num: '20' },
-    { day: 'Wed', num: '21' },
-    { day: 'Thu', num: '22' },
-    { day: 'Fri', num: '23' },
-    { day: 'Sat', num: '24' },
-  ];
+  const selectedLog = foodLogForDate(selectedIso);
+
+  const dashboardMetrics = useMemo(() => {
+    const totals = selectedLog.totals;
+    const goals = profile.nutrientGoals;
+    const fiberLeft = Math.max(0, goals.fiber - totals.fiber);
+    const sugarLeft = Math.max(0, SUGAR_GOAL_G - Math.round(totals.carbs * 0.25));
+    const sodiumLeft = Math.max(0, goals.sodium - totals.sodium);
+    const fiberProgress = goals.fiber > 0 ? ((goals.fiber - fiberLeft) / goals.fiber) * 100 : 0;
+    const sugarProgress = SUGAR_GOAL_G > 0 ? ((SUGAR_GOAL_G - sugarLeft) / SUGAR_GOAL_G) * 100 : 0;
+    const sodiumProgress = goals.sodium > 0 ? ((goals.sodium - sodiumLeft) / goals.sodium) * 100 : 0;
+    const caloriesLeft = Math.round(remaining(goals.calories, totals.calories));
+    const proteinLeft = remaining(goals.protein, totals.protein);
+    const carbsLeft = remaining(goals.carbs, totals.carbs);
+    const fatLeft = remaining(goals.fat, totals.fat);
+    const calorieProgress = progressPct(totals.calories, goals.calories);
+    const carbProgress = progressPct(totals.carbs, goals.carbs);
+    const proteinProgress = progressPct(totals.protein, goals.protein);
+    const fatProgress = progressPct(totals.fat, goals.fat);
+    const healthScore = Math.max(
+      1,
+      Math.min(
+        10,
+        Math.round((calorieProgress + carbProgress + proteinProgress + fiberProgress) / 25),
+      ),
+    );
+    const caloriesBurned = state.exerciseLogs
+      .filter((entry) => entry.date === selectedIso)
+      .reduce((sum, entry) => sum + entry.caloriesBurned, 0);
+    const steps = Math.round(profile.dailyStepGoal * 1.12);
+    const stepsProgress = profile.dailyStepGoal > 0 ? (steps / profile.dailyStepGoal) * 100 : 0;
+    const burnProgress = Math.min(100, (caloriesBurned / 500) * 100);
+    const advice =
+      calorieProgress < 50
+        ? 'You are significantly below your calorie, carbs, and sugar goals. Increase protein for better weight loss. Keep up the good work'
+        : 'Your nutrition is on track today. Keep balancing protein, fiber, and hydration for steady progress.';
+    return {
+      caloriesLeft,
+      calorieProgress,
+      proteinLeft,
+      carbsLeft,
+      fatLeft,
+      proteinProgress,
+      carbProgress,
+      fatProgress,
+      fiberLeft,
+      sugarLeft,
+      sodiumLeft,
+      fiberProgress,
+      sugarProgress,
+      sodiumProgress,
+      healthScore,
+      advice,
+      steps,
+      stepsProgress,
+      caloriesBurned,
+      burnProgress,
+      waterMl: selectedLog.waterMl ?? 250,
+      waterGoalMl: goals.waterMl,
+    };
+  }, [profile, selectedIso, selectedLog, state.exerciseLogs]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -69,47 +166,47 @@ export default function HomeScreen() {
               accessibilityLabel="User profile"
             />
             <View style={styles.headerTextContainer}>
-              <Text style={[styles.greeting, { color: colors.mutedForeground }]}>Good Morning</Text>
-              <Text style={[styles.name, { color: colors.foreground }]}>Mike Wheeler</Text>
+              <Text style={[styles.greeting, { color: colors.mutedForeground }]}>{greetingForNow()}</Text>
+              <Text style={[styles.name, { color: colors.foreground }]}>{profile.name}</Text>
             </View>
           </View>
           <View style={styles.streakPill}>
             <Feather name="award" size={19} color={colors.foreground} />
-            <Text style={[styles.streakText, { color: colors.foreground }]}>1</Text>
+            <Text style={[styles.streakText, { color: colors.foreground }]}>{streakDays}</Text>
           </View>
         </Animated.View>
 
         {/* Date Strip */}
         <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.dateStrip}>
-          {days.map((item, index) => (
+          {days.map((item) => (
             (() => {
-              const selected = selectedDay === item.num;
-              const upcoming = item.num === '24';
+              const selected = selectedIso === item.iso;
+              const isToday = item.iso === todayIso;
               return (
             <Pressable
-              key={index}
+              key={item.iso}
               style={({ pressed }) => [
                 styles.dateItem,
-                (selected || upcoming) && styles.dateItemDark,
+                (selected || isToday) && styles.dateItemDark,
                 selected && styles.dateItemSelected,
                 pressed && styles.pressed,
               ]}
               onPress={() => {
-                setSelectedDay(item.num);
+                setSelectedIso(item.iso);
                 Haptics.selectionAsync();
               }}
               accessibilityRole="button"
               accessibilityLabel={`${item.day} ${item.num}`}
               accessibilityState={{ selected }}
-              testID={`date-${item.num}`}
+              testID={`date-${item.iso}`}
             >
               <Text style={[
                 styles.dateDay,
-                { color: selected || upcoming ? colors.primaryForeground : colors.mutedForeground }
+                { color: selected || isToday ? colors.primaryForeground : colors.mutedForeground }
               ]}>{item.day}</Text>
               <Text style={[
                 styles.dateNum,
-                { color: selected || upcoming ? colors.primaryForeground : colors.mutedForeground }
+                { color: selected || isToday ? colors.primaryForeground : colors.mutedForeground }
               ]}>{item.num}</Text>
             </Pressable>
               );
@@ -139,45 +236,103 @@ export default function HomeScreen() {
               <View style={styles.dashboardCard}>
                 <View>
                   <MaterialCommunityIcons name="fire" size={26} color="#FF6A1A" style={styles.caloriesIcon} />
-                  <Text style={styles.caloriesNumber}>1,314</Text>
+                  <Text style={styles.caloriesNumber}>
+                    {dashboardMetrics.caloriesLeft.toLocaleString()}
+                  </Text>
                   <Text style={styles.caloriesLabel}>Calories Left</Text>
                 </View>
                 <View style={styles.progressRingContainer}>
-                  <Text style={styles.progressLabel}>60%</Text>
-                  <OvalProgress progress={60} color="#FFFFFF" trackColor="#2B3549" thumbColor={colors.primary} />
+                  <Text style={styles.progressLabel}>
+                    {Math.round(dashboardMetrics.calorieProgress)}%
+                  </Text>
+                  <OvalProgress
+                    progress={dashboardMetrics.calorieProgress}
+                    color="#FFFFFF"
+                    trackColor="#2B3549"
+                    thumbColor={colors.primary}
+                  />
                 </View>
               </View>
               <View style={styles.macrosRow}>
-                <MacroCard title="Protein Left" value="137 g" progress={74} color={colors.primary} emoji="🥚" />
-                <MacroCard title="Carbs Left" value="109 g" progress={52} color={colors.primary} emoji="🍞" />
-                <MacroCard title="Fat Left" value="36 g" progress={80} color={colors.primary} emoji="🥑" />
+                <MacroCard
+                  title="Protein Left"
+                  value={`${Math.round(dashboardMetrics.proteinLeft)} g`}
+                  progress={dashboardMetrics.proteinProgress}
+                  emoji="🥚"
+                />
+                <MacroCard
+                  title="Carbs Left"
+                  value={`${Math.round(dashboardMetrics.carbsLeft)} g`}
+                  progress={dashboardMetrics.carbProgress}
+                  emoji="🍞"
+                />
+                <MacroCard
+                  title="Fat Left"
+                  value={`${Math.round(dashboardMetrics.fatLeft)} g`}
+                  progress={dashboardMetrics.fatProgress}
+                  emoji="🥑"
+                />
               </View>
             </View>
 
-            {/* Page 2: Nutrients */}
-            <View
-              style={{
-                width: PAGE_WIDTH,
-                paddingLeft: HEALTH_SCORE_PAGE_INSET,
-                paddingRight: HEALTH_SCORE_PAGE_INSET,
-              }}
-              testID="dashboard-page-health-score"
-            >
-              <HealthScoreCard score={5} outOf={10} advice="Your diet is balanced, but try adding more fiber-rich foods to hit your daily target." />
+            {/* Page 2: Fiber / Sugar / Sodium + Health Score */}
+            <View style={{ width: PAGE_WIDTH, gap: 8 }} testID="dashboard-page-health-score">
               <View style={styles.macrosRow}>
-                <MacroCard title="Fiber Left" value="18 g" progress={62} color={colors.primary} icon="leaf" iconSet="mci" />
-                <MacroCard title="Sugar Left" value="24 g" progress={40} color={colors.primary} icon="candy-outline" iconSet="mci" />
-                <MacroCard title="Sodium Left" value="1,200 mg" progress={55} color={colors.primary} icon="shaker-outline" iconSet="mci" />
+                <NutrientMiniCard
+                  value={`${Math.round(dashboardMetrics.fiberLeft)}`}
+                  unit="g"
+                  label="Fiber Left"
+                  progress={dashboardMetrics.fiberProgress}
+                  emoji="🍎"
+                />
+                <NutrientMiniCard
+                  value={`${Math.round(dashboardMetrics.sugarLeft)}`}
+                  unit="g"
+                  label="Sugar Left"
+                  progress={dashboardMetrics.sugarProgress}
+                  emoji="🍧"
+                />
+                <NutrientMiniCard
+                  value={`${Math.round(dashboardMetrics.sodiumLeft)}`}
+                  unit="mg"
+                  label="Sodium Left"
+                  progress={dashboardMetrics.sodiumProgress}
+                  emoji="🍚"
+                />
               </View>
+              <HealthScoreCard
+                score={dashboardMetrics.healthScore}
+                outOf={10}
+                advice={dashboardMetrics.advice}
+              />
             </View>
 
-            {/* Page 3: Workout */}
-            <View style={{ width: PAGE_WIDTH }} testID="dashboard-page-workout">
-              <WaterIntakeCard value={waterIntake} goal={2.5} onChange={setWaterIntake} />
+            {/* Page 3: Steps / Burn + Water */}
+            <View style={{ width: PAGE_WIDTH, gap: 8 }} testID="dashboard-page-workout">
               <View style={styles.macrosRow}>
-                <MacroCard title="Steps" value="6,248" progress={62} color={colors.primary} icon="shoe-print" iconSet="mci" wide />
-                <MacroCard title="Calorie Burned" value="420 kcal" progress={48} color="#FF6A1A" icon="fire" iconSet="mci" wide />
+                <ActivityMiniCard
+                  label="Steps"
+                  value={formatSteps(dashboardMetrics.steps)}
+                  progress={dashboardMetrics.stepsProgress}
+                  emoji="👣"
+                  largeRing
+                />
+                <ActivityMiniCard
+                  label="Calorie Burned"
+                  value={`${dashboardMetrics.caloriesBurned}`}
+                  unit="Kcal"
+                  progress={dashboardMetrics.burnProgress}
+                  emoji="🔥"
+                  largeRing
+                />
               </View>
+              <WaterIntakeCard
+                valueMl={dashboardMetrics.waterMl}
+                goalMl={dashboardMetrics.waterGoalMl}
+                onChange={(next) => {
+                  void actions.setWaterIntake(selectedIso, next);
+                }}
+              />
             </View>
           </ScrollView>
 
@@ -187,8 +342,7 @@ export default function HomeScreen() {
                 key={index}
                 style={[
                   styles.paginationDot,
-                  { backgroundColor: index === activePage ? colors.foreground : colors.border },
-                  index === activePage && styles.paginationDotActive,
+                  index === activePage ? styles.paginationDotActive : styles.paginationDotInactive,
                 ]}
               />
             ))}
@@ -203,6 +357,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="See all meals"
               testID="see-all-meals"
+              onPress={() => router.push('/log-food/last-meal')}
               style={({ pressed }) => pressed && styles.pressed}
             >
               <Text style={[styles.seeAll, { color: colors.mutedForeground }]}>See All</Text>
@@ -231,7 +386,15 @@ export default function HomeScreen() {
               testID="meal-radial-carousel"
             >
               {meals.map((meal, index) => (
-                <RadialMealCard key={meal.id} meal={meal} active={activeMeal === index} />
+                <RadialMealCard
+                  key={meal.id}
+                  meal={meal}
+                  active={activeMeal === index}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push(`/log-food/dish/${meal.id}`);
+                  }}
+                />
               ))}
             </ScrollView>
             <BlurView
@@ -322,23 +485,137 @@ function OvalProgress({
   );
 }
 
-function MacroCard({ title, value, progress, color, icon, iconSet, emoji, wide }: any) {
+function MacroCard({ title, value, progress, emoji }: {
+  title: string;
+  value: string;
+  progress: number;
+  emoji: string;
+}) {
   const colors = useColors();
-  const IconComp = iconSet === 'mci' ? MaterialCommunityIcons : Feather;
   return (
-    <View style={[styles.macroCard, wide && styles.macroCardWide, { backgroundColor: colors.card }]}>
+    <View style={[styles.macroCard, { backgroundColor: colors.card }]}>
       <View style={styles.macroCardBody}>
-        <Text style={[styles.macroCardValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+        <Text style={[styles.macroCardValue, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
+          {value}
+        </Text>
         <Text style={[styles.macroCardLeft, { color: colors.mutedForeground }]}>{title}</Text>
       </View>
       <View style={styles.macroRing}>
-        <CircularProgress size={68} progress={progress} strokeWidth={5} color={color} trackColor={colors.secondary} />
-        {emoji ? (
-          <Text style={styles.macroEmoji}>{emoji}</Text>
-        ) : (
-          <IconComp name={icon} size={18} color={colors.foreground} style={styles.macroIcon} />
-        )}
+        <ProgressRing progress={progress} size={83} emoji={emoji} />
       </View>
+    </View>
+  );
+}
+
+function NutrientMiniCard({
+  value,
+  unit,
+  label,
+  progress,
+  emoji,
+}: {
+  value: string;
+  unit: string;
+  label: string;
+  progress: number;
+  emoji: string;
+}) {
+  const colors = useColors();
+  return (
+    <View style={[styles.nutrientCard, { backgroundColor: colors.card }]}>
+      <View style={styles.nutrientCardText}>
+        <Text style={[styles.nutrientValue, { color: colors.foreground }]}>
+          {value}
+          <Text style={styles.nutrientUnit}> {unit}</Text>
+        </Text>
+        <Text style={styles.nutrientLabel}>{label}</Text>
+      </View>
+      <View style={styles.nutrientRingWrap}>
+        <ProgressRing progress={progress} size={83} emoji={emoji} />
+      </View>
+    </View>
+  );
+}
+
+function ActivityMiniCard({
+  label,
+  value,
+  unit,
+  progress,
+  emoji,
+  largeRing,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  progress: number;
+  emoji: string;
+  largeRing?: boolean;
+}) {
+  const colors = useColors();
+  const ringSize = largeRing ? 100 : 83;
+  return (
+    <View style={[styles.activityCard, { backgroundColor: colors.card }]}>
+      <View style={styles.nutrientCardText}>
+        <Text style={styles.nutrientLabel}>{label}</Text>
+        <Text style={[styles.nutrientValue, { color: colors.foreground }]}>
+          {value}
+          {unit ? <Text style={styles.activityUnit}> {unit}</Text> : null}
+        </Text>
+      </View>
+      <View style={[styles.nutrientRingWrap, largeRing && styles.activityRingWrap]}>
+        <ProgressRing progress={progress} size={ringSize} emoji={emoji} />
+      </View>
+    </View>
+  );
+}
+
+function ProgressRing({
+  progress,
+  size,
+  emoji,
+}: {
+  progress: number;
+  size: number;
+  emoji: string;
+}) {
+  const strokeWidth = 6;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, progress));
+  const strokeDashoffset = circumference * (1 - clamped / 100);
+  const angle = ((clamped / 100) * 360 - 90) * (Math.PI / 180);
+  const thumbX = size / 2 + radius * Math.cos(angle);
+  const thumbY = size / 2 + radius * Math.sin(angle);
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#F5F5F5"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#1570EF"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+        {clamped > 0 ? (
+          <Circle cx={thumbX} cy={thumbY} r={6} fill="#1570EF" />
+        ) : null}
+      </Svg>
+      <Text style={styles.ringEmoji}>{emoji}</Text>
     </View>
   );
 }
@@ -348,11 +625,8 @@ function HealthScoreCard({ score, outOf, advice }: { score: number; outOf: numbe
   return (
     <View style={styles.healthScoreCard} testID="health-score-card">
       <View style={styles.healthScoreHeader}>
-        <MaterialCommunityIcons name="heart-pulse" size={22} color={'#4ADE80'} />
         <Text style={styles.healthScoreTitle}>Health Score</Text>
-        <Text style={styles.healthScoreValue}>
-          {score}<Text style={styles.healthScoreOutOf}>/{outOf}</Text>
-        </Text>
+        <Text style={styles.healthScoreValue}>{score}/{outOf}</Text>
       </View>
       <View style={styles.healthScoreTrack}>
         <View style={[styles.healthScoreFill, { width: `${progress}%` }]} />
@@ -363,60 +637,57 @@ function HealthScoreCard({ score, outOf, advice }: { score: number; outOf: numbe
 }
 
 function WaterIntakeCard({
-  value,
-  goal,
+  valueMl,
+  goalMl,
   onChange,
 }: {
-  value: number;
-  goal: number;
+  valueMl: number;
+  goalMl: number;
   onChange: (v: number) => void;
 }) {
   const colors = useColors();
-  const progress = Math.min(100, (value / goal) * 100);
 
   const adjust = (delta: number) => {
-    onChange(Math.max(0, Math.round((value + delta) * 10) / 10));
+    onChange(Math.max(0, Math.min(goalMl, valueMl + delta)));
     Haptics.selectionAsync();
   };
 
   return (
     <View style={[styles.waterCard, { backgroundColor: colors.card }]}>
-      <View style={styles.waterHeader}>
-        <View style={styles.waterIconBadge}>
-          <Feather name="droplet" size={16} color="#0A7AFF" />
-        </View>
+      <View style={styles.waterLeft}>
         <Text style={[styles.waterTitle, { color: colors.foreground }]}>Water Intake</Text>
-        <Feather name="settings" size={18} color={colors.mutedForeground} />
-      </View>
-
-      <View style={styles.waterTrack}>
-        <View style={[styles.waterFill, { width: `${progress}%` }]} />
-      </View>
-
-      <View style={styles.waterControlsRow}>
-        <Text style={[styles.waterValue, { color: colors.foreground }]}>
-          {value.toFixed(1)} <Text style={styles.waterGoal}>/ {goal} L</Text>
-        </Text>
-        <View style={styles.waterButtons}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Decrease water intake"
-            testID="water-decrease"
-            onPress={() => adjust(-0.2)}
-            style={({ pressed }) => [styles.waterButton, pressed && styles.pressed]}
-          >
-            <Feather name="minus" size={16} color={colors.foreground} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Increase water intake"
-            testID="water-increase"
-            onPress={() => adjust(0.2)}
-            style={({ pressed }) => [styles.waterButton, styles.waterButtonPrimary, pressed && styles.pressed]}
-          >
-            <Feather name="plus" size={16} color="#FFFFFF" />
-          </Pressable>
+        <View style={styles.waterValueRow}>
+          <Image
+            source={require('@/assets/images/home/water-glass.png')}
+            style={styles.waterGlass}
+            accessibilityLabel="Water glass"
+          />
+          <Text style={[styles.waterValue, { color: colors.foreground }]}>
+            {valueMl}
+            <Text style={styles.waterUnit}> ml</Text>
+          </Text>
+          <Feather name="settings" size={20} color="#64748B" accessibilityLabel="Water settings" />
         </View>
+      </View>
+      <View style={styles.waterButtons}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Decrease water intake"
+          testID="water-decrease"
+          onPress={() => adjust(-WATER_STEP_ML)}
+          style={({ pressed }) => [styles.waterButtonOutline, pressed && styles.pressed]}
+        >
+          <Feather name="minus" size={16} color="#0F172A" />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Increase water intake"
+          testID="water-increase"
+          onPress={() => adjust(WATER_STEP_ML)}
+          style={({ pressed }) => [styles.waterButtonFilled, pressed && styles.pressed]}
+        >
+          <Feather name="plus" size={16} color="#FFFFFF" />
+        </Pressable>
       </View>
     </View>
   );
@@ -425,9 +696,11 @@ function WaterIntakeCard({
 function RadialMealCard({
   meal,
   active,
+  onPress,
 }: {
-  meal: (typeof meals)[number];
+  meal: LastMealDish;
   active: boolean;
+  onPress: () => void;
 }) {
   const colors = useColors();
 
@@ -436,7 +709,7 @@ function RadialMealCard({
       accessibilityRole="button"
       accessibilityLabel={`${meal.name}, ${meal.calories} calories`}
       testID={`meal-card-${meal.id}`}
-      onPress={() => Haptics.selectionAsync()}
+      onPress={onPress}
       style={({ pressed }) => [
         styles.mealCard,
         {
@@ -448,7 +721,7 @@ function RadialMealCard({
     >
       <View style={styles.plateHalo}>
         <Image
-          source={require('@/assets/images/profile-avatar.png')}
+          source={meal.image}
           style={styles.mealImage}
           resizeMode="cover"
         />
@@ -485,6 +758,14 @@ function MealMacro({ icon, value }: { icon: 'circle' | 'box' | 'heart'; value: n
     </View>
   );
 }
+
+const bentoCardShadow = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.04,
+  shadowRadius: 2,
+  elevation: 1,
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -577,11 +858,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 10,
+    ...bentoCardShadow,
   },
   caloriesNumber: {
     color: '#ffffff',
@@ -619,139 +896,176 @@ const styles = StyleSheet.create({
   macroCard: {
     flex: 1,
     borderRadius: 24,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    height: 162,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
+    padding: 16,
+    gap: 10,
+    minHeight: 162,
+    ...bentoCardShadow,
   },
-  macroCardWide: {
-    height: 162,
-    paddingHorizontal: 16,
+  nutrientCard: {
+    flex: 1,
+    borderRadius: 24,
+    padding: 16,
+    gap: 10,
+    minHeight: 162,
+    ...bentoCardShadow,
+  },
+  nutrientCardText: {
+    gap: 2,
+  },
+  nutrientValue: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontFamily: 'Inter_500Medium',
+    letterSpacing: -0.15,
+  },
+  nutrientUnit: {
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+  },
+  nutrientLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#94A3B8',
+    fontFamily: 'Inter_400Regular',
+  },
+  nutrientRingWrap: {
+    height: 83,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityCard: {
+    flex: 1,
+    borderRadius: 24,
+    padding: 16,
+    gap: 10,
+    minHeight: 180,
+    ...bentoCardShadow,
+  },
+  activityRingWrap: {
+    height: 100,
+  },
+  activityUnit: {
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#64748B',
+    fontFamily: 'Inter_400Regular',
+  },
+  ringEmoji: {
+    position: 'absolute',
+    fontSize: 20,
+    letterSpacing: 1,
   },
   healthScoreCard: {
     backgroundColor: '#0A0A0A',
     borderRadius: 24,
-    padding: 20,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 10,
+    padding: 16,
+    gap: 16,
+    ...bentoCardShadow,
   },
   healthScoreHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
+    gap: 2,
   },
   healthScoreTitle: {
     flex: 1,
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  healthScoreValue: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontFamily: 'Inter_700Bold',
-  },
-  healthScoreOutOf: {
-    color: '#A1A1AA',
-    fontSize: 14,
+    lineHeight: 22,
+    letterSpacing: -0.18,
     fontFamily: 'Inter_500Medium',
   },
+  healthScoreValue: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    fontFamily: 'Inter_500Medium',
+    textAlign: 'right',
+  },
   healthScoreTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2B2B30',
+    height: 14,
+    backgroundColor: '#1E293B',
     overflow: 'hidden',
-    marginBottom: 14,
   },
   healthScoreFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: '#4ADE80',
+    height: 15,
+    backgroundColor: '#1570EF',
   },
   healthScoreAdvice: {
-    color: '#D4D4D8',
-    fontSize: 13,
+    color: '#FFFFFF',
+    fontSize: 10,
+    lineHeight: 12,
     fontFamily: 'Inter_400Regular',
-    lineHeight: 19,
   },
   waterCard: {
     borderRadius: 24,
-    padding: 20,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  waterHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  waterIconBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(10,122,255,0.12)',
-  },
-  waterTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  waterTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(10,122,255,0.12)',
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  waterFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: '#0A7AFF',
-  },
-  waterControlsRow: {
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
+    minHeight: 117,
+    ...bentoCardShadow,
+  },
+  waterLeft: {
+    flex: 1,
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    gap: 12,
+  },
+  waterTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    fontFamily: 'Inter_500Medium',
+  },
+  waterValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  waterGlass: {
+    width: 32,
+    height: 32,
   },
   waterValue: {
-    fontSize: 22,
-    fontFamily: 'Inter_700Bold',
-  },
-  waterGoal: {
-    fontSize: 14,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.2,
     fontFamily: 'Inter_500Medium',
-    color: '#A1A1AA',
+  },
+  waterUnit: {
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: '#64748B',
+    fontFamily: 'Inter_400Regular',
   },
   waterButtons: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
+    alignItems: 'center',
   },
-  waterButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  waterButtonOutline: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(10,122,255,0.12)',
   },
-  waterButtonPrimary: {
-    backgroundColor: '#0A7AFF',
+  waterButtonFilled: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0A0A0A',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   macroCardBody: {
     flexDirection: 'column',
@@ -767,16 +1081,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   macroRing: {
-    marginTop: 10,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  macroIcon: {
-    position: 'absolute',
-  },
-  macroEmoji: {
-    position: 'absolute',
-    fontSize: 18,
   },
   mealsSection: {
     marginBottom: 32,
@@ -904,11 +1210,15 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   paginationDot: {
-    width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: 999,
+  },
+  paginationDotInactive: {
+    width: 6,
+    backgroundColor: '#CBD5E1',
   },
   paginationDotActive: {
     width: 12,
+    backgroundColor: '#0A0A0A',
   },
 });

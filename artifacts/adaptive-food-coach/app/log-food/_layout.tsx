@@ -6,8 +6,9 @@ import { colors } from '@/constants/tokens';
  * Layout for the food-logging sub-tree.
  *
  * Hosts the search home, add-custom food, meal-builder, saved list,
- * and the entry-detail/[entryId] screen. Each screen renders its
- * own header via the shared `Header` primitive.
+ * last-meal list, dish nutrition template, and the entry-detail/[entryId]
+ * screen. Each screen renders its own header via the shared `Header`
+ * primitive or a Figma-matched circular icon header.
  */
 export default function LogFoodLayout() {
   return (

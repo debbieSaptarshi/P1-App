@@ -2,9 +2,10 @@
  * Seed food database — common foods shown in the Figma sample data.
  */
 
+import { mergeFoodCatalog } from '@/constants/logFoodCatalog';
 import type { FoodItem } from '@/types';
 
-export const seedFoodDatabase: FoodItem[] = [
+const coreFoods: FoodItem[] = [
   { id: 'fd_chicken_breast', name: 'Grilled Chicken Breast', servingSize: '100 g', calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, sodium: 74 },
   { id: 'fd_brown_rice', name: 'Cooked Brown Rice', servingSize: '100 g', calories: 111, protein: 2.6, carbs: 23, fat: 0.9, fiber: 1.8, sodium: 5 },
   { id: 'fd_avocado', name: 'Avocado', servingSize: '½ fruit', calories: 120, protein: 1.5, carbs: 6.4, fat: 11, fiber: 5, sodium: 5 },
@@ -17,4 +18,8 @@ export const seedFoodDatabase: FoodItem[] = [
   { id: 'fd_eggs', name: 'Whole Egg', servingSize: '1 large', calories: 72, protein: 6, carbs: 0.4, fat: 5, fiber: 0, sodium: 71 },
   { id: 'fd_oats', name: 'Rolled Oats (cooked)', servingSize: '100 g', calories: 71, protein: 2.5, carbs: 12, fat: 1.5, fiber: 1.7, sodium: 0 },
   { id: 'fd_banana', name: 'Banana', servingSize: '1 medium', calories: 105, protein: 1.3, carbs: 27, fat: 0.4, fiber: 3.1, sodium: 1 },
+  { id: 'fd_peanut_butter', name: 'Peanut Butter', servingSize: 'tbsp', calories: 94, protein: 4, carbs: 3.5, fat: 8, fiber: 1, sodium: 70 },
+  { id: 'fd_apples', name: 'Apples', servingSize: 'tbsp', calories: 72, protein: 0.3, carbs: 19, fat: 0.2, fiber: 3.3, sodium: 1 },
 ];
+
+export const seedFoodDatabase: FoodItem[] = mergeFoodCatalog(coreFoods);

@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -34,12 +35,13 @@ const QUANTITY_STEP = 0.5;
 export default function ScanResultScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ foodId?: string }>();
+  const params = useLocalSearchParams<{ foodId?: string; photoUri?: string }>();
   const { state, actions } = useAppStore();
   const [mealType, setMealType] = useState<MealType>('lunch');
   const [quantity, setQuantity] = useState(1);
 
   const foodId = typeof params.foodId === 'string' ? params.foodId : '';
+  const photoUri = typeof params.photoUri === 'string' ? params.photoUri : '';
 
   const food = useMemo(
     () => state.foodDatabase.find((f) => f.id === foodId),
@@ -75,7 +77,7 @@ export default function ScanResultScreen() {
       quantity,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    router.replace('/(tabs)');
   }, [actions, food, mealType, quantity, router, totals]);
 
   if (!food) {
@@ -119,9 +121,18 @@ export default function ScanResultScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroCard}>
-          <View style={styles.heroBadge}>
-            <Feather name="check-circle" size={24} color={colors.accentGreen} />
-          </View>
+          {photoUri ? (
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.heroPhoto}
+              contentFit="cover"
+              accessibilityLabel="Captured scan"
+            />
+          ) : (
+            <View style={styles.heroBadge}>
+              <Feather name="check-circle" size={24} color={colors.accentGreen} />
+            </View>
+          )}
           <Text style={styles.heroName}>{food.name}</Text>
           {food.brand ? <Text style={styles.heroBrand}>{food.brand}</Text> : null}
           <View style={styles.heroServingRow}>
@@ -265,6 +276,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 12,
     elevation: 2,
+  },
+  heroPhoto: {
+    width: '100%',
+    height: 180,
+    borderRadius: radii.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.background,
   },
   heroBadge: {
     width: 56,

@@ -104,6 +104,7 @@ export interface FoodLogEntry {
 export interface DailyFoodLog {
   date: string;
   entries: FoodLogEntry[];
+  waterMl?: number;
   totals: {
     calories: number;
     protein: number;
@@ -198,6 +199,7 @@ export interface AccountabilityGroup {
   cover?: string;
   joined: boolean;
   category: 'weight_loss' | 'nutrition' | 'exercise' | 'general';
+  unreadCount?: number;
 }
 
 export interface LeaderboardEntry {

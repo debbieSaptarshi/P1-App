@@ -74,10 +74,55 @@ export const seedMilestones: MilestoneBadge[] = [
 ];
 
 export const seedGroups: AccountabilityGroup[] = [
-  { id: 'grp_1', name: 'Balanced Plate Buddies', description: 'Healthy habits together.', members: 1287, joined: true, category: 'nutrition' },
-  { id: 'grp_2', name: 'Run Club 5K+', description: 'Daily running encouragement.', members: 642, joined: true, category: 'exercise' },
-  { id: 'grp_3', name: 'Strength & Recovery', description: 'For lifting and recovery days.', members: 410, joined: false, category: 'exercise' },
-  { id: 'grp_4', name: 'Mindful Eating', description: 'Slow, intentional nutrition.', members: 821, joined: false, category: 'general' },
+  {
+    id: 'grp_1',
+    name: 'Debnath Parivar',
+    description: 'Under Dietician Ravi Jadhav',
+    members: 4,
+    joined: true,
+    category: 'general',
+    unreadCount: 12,
+  },
+  {
+    id: 'grp_2',
+    name: 'Fitness @ Silchar',
+    description: 'Share workouts that match your calorie goals',
+    members: 113,
+    joined: false,
+    category: 'exercise',
+  },
+  {
+    id: 'grp_3',
+    name: 'Diabetes fighters',
+    description: 'Share workouts that match your calorie goals',
+    members: 113,
+    joined: false,
+    category: 'nutrition',
+  },
+  {
+    id: 'grp_4',
+    name: 'New year revolutions',
+    description: 'Share workouts that match your calorie goals',
+    members: 113,
+    joined: false,
+    category: 'general',
+  },
+  {
+    id: 'grp_5',
+    name: 'Muscle gain and Bulking',
+    description: 'Share workouts that match your calorie goals',
+    members: 113,
+    joined: false,
+    category: 'exercise',
+  },
+  {
+    id: 'grp_6',
+    name: 'Weight lost support',
+    description: 'Share workouts that match your calorie goals',
+    members: 113,
+    joined: false,
+    category: 'weight_loss',
+  },
 ];
 
 export const seedGroupPosts: GroupPost[] = [

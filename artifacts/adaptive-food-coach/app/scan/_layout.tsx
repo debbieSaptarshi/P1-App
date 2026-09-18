@@ -1,6 +1,5 @@
 import React from 'react';
 import { Stack } from 'expo-router';
-import { colors } from '@/constants/tokens';
 
 /**
  * Layout for the Scanner sub-tree.
@@ -14,7 +13,7 @@ export default function ScanLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
+        contentStyle: { backgroundColor: '#000000' },
         animation: 'slide_from_right',
       }}
     />
