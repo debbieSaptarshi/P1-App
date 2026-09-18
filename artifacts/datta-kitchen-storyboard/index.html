@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Datta Kitchen — production boards</title>
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      background: #eceae4;
+      font-family: "Courier New", Courier, monospace;
+      color: #111;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      padding: 10px 20px;
+      background: #fff;
+      border-bottom: 2px solid #111;
+    }
+    header strong { letter-spacing: 0.08em; }
+    header button {
+      font: inherit;
+      border: 1px solid #111;
+      background: #fff;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+    .stage {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      align-items: center;
+    }
+    .board {
+      width: min(96vw, 1440px);
+      aspect-ratio: 16 / 9;
+      background: #fff;
+      box-shadow: 0 1px 0 #111;
+    }
+    .board img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .nav { margin-left: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>DATTA KITCHEN</strong>
+    <span>ONE DAY · 10 SLIDES · 46 PANELS</span>
+    <div class="nav">
+      <button type="button" id="prev">Prev</button>
+      <span id="pos">1 / 10</span>
+      <button type="button" id="next">Next</button>
+      <button type="button" id="all">All</button>
+    </div>
+  </header>
+  <div class="stage" id="stage"></div>
+  <script>
+    const slides = Array.from({ length: 10 }, (_, i) =>
+      `slides/SLIDE-${String(i + 1).padStart(2, "0")}.png`
+    );
+    const stage = document.getElementById("stage");
+    const pos = document.getElementById("pos");
+    let mode = "deck";
+    let i = 0;
+    function render() {
+      stage.innerHTML = "";
+      const show = mode === "all" ? slides.map((_, n) => n) : [i];
+      show.forEach((n) => {
+        const wrap = document.createElement("div");
+        wrap.className = "board";
+        const img = document.createElement("img");
+        img.src = slides[n];
+        img.alt = `Slide ${n + 1}`;
+        wrap.appendChild(img);
+        stage.appendChild(wrap);
+      });
+      pos.textContent = mode === "all" ? "ALL" : `${i + 1} / 10`;
+    }
+    document.getElementById("prev").onclick = () => {
+      mode = "deck";
+      i = (i + 9) % 10;
+      render();
+    };
+    document.getElementById("next").onclick = () => {
+      mode = "deck";
+      i = (i + 1) % 10;
+      render();
+    };
+    document.getElementById("all").onclick = () => {
+      mode = mode === "all" ? "deck" : "all";
+      render();
+    };
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight") document.getElementById("next").click();
+      if (e.key === "ArrowLeft") document.getElementById("prev").click();
+    });
+    render();
+  </script>
+</body>
+</html>
