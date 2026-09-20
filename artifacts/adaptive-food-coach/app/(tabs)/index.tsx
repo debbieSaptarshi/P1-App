@@ -1,3 +1,6 @@
+import { demoMode } from '@/services/supabase';
+import { recentMeals } from '@/services/recent-meals';
+import { localDate } from '@/services/dates';
 import React, { useMemo, useState } from 'react';
 import {
   Dimensions,
@@ -31,10 +34,10 @@ const SUGAR_GOAL_G = 50;
 const WATER_STEP_ML = 50;
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
-const meals = LAST_MEALS;
+
 
 function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return localDate(date);
 }
 
 function currentWeekDays() {
@@ -79,6 +82,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { state, streakDays, foodLogForDate, actions } = useAppStore();
   const profile = state.profile;
+  const meals = demoMode ? LAST_MEALS : recentMeals(state.foodLogs);
   const days = useMemo(() => currentWeekDays(), []);
   const todayIso = isoDate(new Date());
 
@@ -92,7 +96,7 @@ export default function HomeScreen() {
     const totals = selectedLog.totals;
     const goals = profile.nutrientGoals;
     const fiberLeft = Math.max(0, goals.fiber - totals.fiber);
-    const sugarLeft = Math.max(0, SUGAR_GOAL_G - Math.round(totals.carbs * 0.25));
+    const sugarLeft = 0; // Sugar is not tracked by the nutrition contract.
     const sodiumLeft = Math.max(0, goals.sodium - totals.sodium);
     const fiberProgress = goals.fiber > 0 ? ((goals.fiber - fiberLeft) / goals.fiber) * 100 : 0;
     const sugarProgress = SUGAR_GOAL_G > 0 ? ((SUGAR_GOAL_G - sugarLeft) / SUGAR_GOAL_G) * 100 : 0;
@@ -115,13 +119,13 @@ export default function HomeScreen() {
     const caloriesBurned = state.exerciseLogs
       .filter((entry) => entry.date === selectedIso)
       .reduce((sum, entry) => sum + entry.caloriesBurned, 0);
-    const steps = Math.round(profile.dailyStepGoal * 1.12);
+    const steps = state.steps.find(s => s.date === selectedIso)?.count ?? 0;
     const stepsProgress = profile.dailyStepGoal > 0 ? (steps / profile.dailyStepGoal) * 100 : 0;
     const burnProgress = Math.min(100, (caloriesBurned / 500) * 100);
     const advice =
       calorieProgress < 50
-        ? 'You are significantly below your calorie, carbs, and sugar goals. Increase protein for better weight loss. Keep up the good work'
-        : 'Your nutrition is on track today. Keep balancing protein, fiber, and hydration for steady progress.';
+        ? 'Your log is still filling in. Add meals and water to see your progress.'
+        : 'These totals reflect your logged meals. Ask the coach for ideas that fit your preferences.';
     return {
       caloriesLeft,
       calorieProgress,
@@ -146,7 +150,7 @@ export default function HomeScreen() {
       waterMl: selectedLog.waterMl ?? 250,
       waterGoalMl: goals.waterMl,
     };
-  }, [profile, selectedIso, selectedLog, state.exerciseLogs]);
+  }, [profile, selectedIso, selectedLog, state.exerciseLogs, state.steps]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -286,9 +290,9 @@ export default function HomeScreen() {
                   emoji="🍎"
                 />
                 <NutrientMiniCard
-                  value={`${Math.round(dashboardMetrics.sugarLeft)}`}
+                  value="—"
                   unit="g"
-                  label="Sugar Left"
+                  label="Sugar (not tracked)"
                   progress={dashboardMetrics.sugarProgress}
                   emoji="🍧"
                 />
@@ -364,6 +368,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
+          {!meals.length ? <Text style={{ paddingHorizontal: 20, paddingVertical: 12 }}>No meals logged yet. Tap + to add your first meal.</Text> : null}
           <View style={styles.radialCarousel}>
             <ScrollView
               horizontal
@@ -392,7 +397,7 @@ export default function HomeScreen() {
                   active={activeMeal === index}
                   onPress={() => {
                     Haptics.selectionAsync();
-                    router.push(`/log-food/dish/${meal.id}`);
+                    router.push(demoMode ? `/log-food/dish/${meal.id}` : `/log-food/detail/${meal.id}`);
                   }}
                 />
               ))}
@@ -625,7 +630,7 @@ function HealthScoreCard({ score, outOf, advice }: { score: number; outOf: numbe
   return (
     <View style={styles.healthScoreCard} testID="health-score-card">
       <View style={styles.healthScoreHeader}>
-        <Text style={styles.healthScoreTitle}>Health Score</Text>
+        <Text style={styles.healthScoreTitle}>Logging progress</Text>
         <Text style={styles.healthScoreValue}>{score}/{outOf}</Text>
       </View>
       <View style={styles.healthScoreTrack}>

@@ -1,8 +1,14 @@
-import { Router, type IRouter } from "express";
-import healthRouter from "./health";
-
-const router: IRouter = Router();
-
+import { Router } from 'express';
+import healthRouter from './health';
+import { requireAuth } from '../lib/supabase';
+import { rateLimit } from '../lib/rate-limit';
+import { accountRouter } from './account';
+import { aiRouter } from './ai';
+import { communityRouter } from './community';
+const router = Router();
 router.use(healthRouter);
-
+router.use('/v1', requireAuth, rateLimit(120, 'user'));
+router.use('/v1', accountRouter);
+router.use('/v1/ai', rateLimit(10, 'user'), aiRouter);
+router.use('/v1/community', rateLimit(60, 'user'), communityRouter);
 export default router;

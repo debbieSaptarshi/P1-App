@@ -1,3 +1,4 @@
+import { localDate } from '@/services/dates';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
@@ -107,7 +108,7 @@ export default function ExerciseIndexScreen() {
   const { state, actions } = useAppStore();
   const [loggedMessage, setLoggedMessage] = useState<string | null>(null);
 
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayIso = useMemo(() => localDate(), []);
 
   const todaysBurn = useMemo(() => {
     return state.exerciseLogs

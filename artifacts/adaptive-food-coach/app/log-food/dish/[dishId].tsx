@@ -1,3 +1,6 @@
+import { Redirect } from 'expo-router';
+import { demoMode } from '@/services/supabase';
+import { localDate } from '@/services/dates';
 import React, { useCallback, useState } from 'react';
 import {
   Pressable,
@@ -32,7 +35,7 @@ const iconSparkle = require('@/assets/images/nutrition/icon-sparkle.svg');
  * list or the Home carousel. Layout stays the same; copy, macros,
  * composition petals, and ingredients swap with `dishId`.
  */
-export default function DishNutritionScreen() {
+function DishNutritionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ dishId?: string }>();
@@ -49,7 +52,7 @@ export default function DishNutritionScreen() {
   }, [dish]);
 
   const handleSave = useCallback(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDate();
     actions.logFood({
       date: today,
       mealType: 'lunch',
@@ -491,3 +494,5 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
 });
+
+export default function DishRoute(){ return demoMode ? <DishNutritionScreen/> : <Redirect href="/log-food"/>; }

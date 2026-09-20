@@ -14,11 +14,9 @@ import type { CameraView } from 'expo-camera';
 import { Button, Header } from '@/components/ui';
 import { LiveCamera } from '@/components/scan/LiveCamera';
 import { colors, radii, spacing } from '@/constants/tokens';
-import {
-  SCAN_BARCODE_FALLBACK_ID,
-  resolveBarcodeFoodId,
-  resolveQueryFoodId,
-} from '@/constants/scanLookup';
+import { Alert } from 'react-native';
+import { lookupBarcode } from '@/services/ai';
+import { errorMessage } from '@/services/api';
 import { useAppStore } from '@/hooks/useAppStore';
 
 export default function BarcodeScreen() {
@@ -34,18 +32,18 @@ export default function BarcodeScreen() {
     router.push({ pathname: '/scan/result/[foodId]', params: { foodId } });
   };
 
-  const handleScanned = (data: string) => {
+  const handleScanned = async (data: string) => {
     if (lock.current) return;
     lock.current = true;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    openResult(resolveBarcodeFoodId(data) ?? SCAN_BARCODE_FALLBACK_ID);
+    try { await lookupBarcode(data); router.push('/scan/review'); }
+    catch (error) { Alert.alert('Product not found', errorMessage(error)); }
+    finally { lock.current = false; }
   };
-
   const handleSearch = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    openResult(
-      resolveQueryFoodId(query, state.foodDatabase) ?? SCAN_BARCODE_FALLBACK_ID,
-    );
+    if (/^\d{8,14}$/.test(query.trim())) { void handleScanned(query.trim()); return; }
+    const food = state.foodDatabase.find(f => f.name.toLowerCase().includes(query.trim().toLowerCase()));
+    if (food && query.trim()) openResult(food.id);
+    else Alert.alert('No match', 'Enter a barcode, scan a label, or add a custom food.');
   };
 
   return (

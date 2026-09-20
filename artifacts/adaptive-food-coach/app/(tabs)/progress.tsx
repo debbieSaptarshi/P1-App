@@ -1,3 +1,4 @@
+import { localDate } from '@/services/dates';
 import React, { useMemo, useState } from 'react';
 import {
   Image,
@@ -63,7 +64,7 @@ function startOfWeekSunday(date: Date): Date {
 }
 
 function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return localDate(date);
 }
 
 function addDays(date: Date, days: number): Date {

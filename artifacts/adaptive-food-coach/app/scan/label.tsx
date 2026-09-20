@@ -12,11 +12,15 @@ import * as Haptics from 'expo-haptics';
 import type { CameraView } from 'expo-camera';
 import { Header } from '@/components/ui';
 import { LiveCamera } from '@/components/scan/LiveCamera';
-import { SCAN_LABEL_FALLBACK_ID } from '@/constants/scanLookup';
+import { Alert } from 'react-native';
+import { analyzeFood, requestAiConsent } from '@/services/ai';
+import { errorMessage } from '@/services/api';
+import { useAppStore } from '@/hooks/useAppStore';
 import { radii, spacing } from '@/constants/tokens';
 
 export default function LabelScreen() {
   const router = useRouter();
+  const { state } = useAppStore();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
   const [flashOn, setFlashOn] = useState(false);
@@ -27,21 +31,12 @@ export default function LabelScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setCapturing(true);
     try {
-      const photo = await cameraRef.current?.takePictureAsync({
-        quality: 0.7,
-        skipProcessing: true,
-      });
-      router.push({
-        pathname: '/scan/result/[foodId]',
-        params: photo?.uri
-          ? { foodId: SCAN_LABEL_FALLBACK_ID, photoUri: photo.uri }
-          : { foodId: SCAN_LABEL_FALLBACK_ID },
-      });
-    } catch {
-      router.push({
-        pathname: '/scan/result/[foodId]',
-        params: { foodId: SCAN_LABEL_FALLBACK_ID },
-      });
+      await requestAiConsent(state.preferences.aiConsent);
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7, base64: true });
+      if (!photo?.uri) throw new Error('Camera is not ready.');
+      await analyzeFood({ kind: 'label', uri: photo.uri, base64: photo.base64 });
+      router.push('/scan/review');
+    } catch (error) { Alert.alert('Unable to read label', errorMessage(error));
     } finally {
       setCapturing(false);
     }

@@ -1,0 +1,25 @@
+# Local stack name. Hosted project in the 7Labs org: nhdjdifnylqxkrcdskny
+project_id = "adaptive-food-coach"
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+max_rows = 1000
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+[studio]
+enabled = true
+port = 54323
+[inbucket]
+enabled = true
+port = 54324
+[auth]
+enabled = true
+site_url = "http://localhost:8081"
+additional_redirect_urls = ["adaptive-food-coach://**", "http://localhost:8081/**"]
+minimum_password_length = 8
+[auth.email]
+enable_signup = true
+enable_confirmations = true

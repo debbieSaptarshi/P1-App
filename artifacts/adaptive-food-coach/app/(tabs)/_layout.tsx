@@ -16,6 +16,7 @@ import Animated, {
 type AddAction = { label: string; icon: keyof typeof Feather.glyphMap; href: Href };
 
 const ADD_ACTIONS: AddAction[] = [
+  { label: 'AI Coach & Meal Ideas', icon: 'message-circle', href: '/coach' },
   { label: 'Scan Food', icon: 'maximize', href: '/scan/food-camera' },
   { label: 'Food Database', icon: 'search', href: '/log-food' },
   { label: 'Log Exercise', icon: 'activity', href: '/exercise' },

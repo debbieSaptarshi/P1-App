@@ -1,3 +1,5 @@
+import { Alert, AppState } from 'react-native';
+import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
@@ -13,10 +15,10 @@ import { Header } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/tokens';
 import { useAppStore } from '@/hooks/useAppStore';
 
-// ---- Tunables for the mock session ------------------------------------
+// Foreground timer
 
-/** Mock runner speed in m/s (~3:45/km pace). */
-const MOCK_SPEED_MPS = 4.4;
+
+
 /** Step size used when the simulated time ticks forward. */
 const TICK_MS = 1000;
 
@@ -37,15 +39,7 @@ const formatPace = (secPerKm: number) => {
   return `${m}'${String(s).padStart(2, '0')}\"/km`;
 };
 
-/**
- * Active GPS run session.
- *
- * Renders a dark map-styled surface (mock — the real `expo-location`
- * module is not yet wired) with large distance / pace / duration /
- * calories stats that update once per second. The Stop button persists
- * the resulting run via `actions.logExercise(...)` and pops back to
- * the index.
- */
+// Foreground GPS tracking pauses when the app leaves the foreground.
 export default function RunActiveScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -54,6 +48,8 @@ export default function RunActiveScreen() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [distanceMeters, setDistanceMeters] = useState(0);
   const [paused, setPausedState] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState('Waiting for GPS');
+  const lastPosition = useRef<Location.LocationObject | null>(null);
   const startedAtRef = useRef<string>(new Date().toISOString());
 
   // Tick forward while running.
@@ -61,11 +57,41 @@ export default function RunActiveScreen() {
     if (paused) return undefined;
     const id = setInterval(() => {
       setElapsedSec((prev) => prev + 1);
-      setDistanceMeters((prev) => prev + MOCK_SPEED_MPS);
+
     }, TICK_MS);
     // Add a subtle bell on each minute boundary.
     return () => clearInterval(id);
   }, [paused]);
+
+  useEffect(() => {
+    let active = true; let subscription: Location.LocationSubscription | undefined;
+    lastPosition.current = null;
+    if (paused) return;
+    void (async () => {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (!permission.granted) throw new Error('Location permission is needed to measure distance.');
+        subscription = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 2000 }, position => {
+          if (!active || (position.coords.accuracy ?? 100) > 30) return;
+          setGpsStatus('GPS active · keep app open');
+          const previous = lastPosition.current;
+          if (previous) {
+            const radians = (n: number) => n * Math.PI / 180;
+            const a = previous.coords, b = position.coords;
+            const deltaLat = radians(b.latitude - a.latitude), deltaLon = radians(b.longitude - a.longitude);
+            const h = Math.sin(deltaLat / 2) ** 2 + Math.cos(radians(a.latitude)) * Math.cos(radians(b.latitude)) * Math.sin(deltaLon / 2) ** 2;
+            const meters = 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+            const seconds = (position.timestamp - previous.timestamp) / 1000;
+            if (seconds > 0 && meters / seconds < 12 && meters > 2) setDistanceMeters(distance => distance + meters);
+          }
+          lastPosition.current = position;
+        });
+        if (!active) subscription.remove();
+      } catch (error) { if (active) { setGpsStatus('GPS unavailable'); setPausedState(true); Alert.alert('Run tracking', error instanceof Error ? error.message : 'Location is unavailable.'); } }
+    })();
+    return () => { active = false; subscription?.remove(); };
+  }, [paused]);
+  useEffect(() => { const subscription = AppState.addEventListener('change', state => { if (state !== 'active') { setPausedState(true); lastPosition.current = null; } }); return () => subscription.remove(); }, []);
 
   const distanceKm = +(distanceMeters / 1000).toFixed(2);
   const paceSecPerKm =
@@ -93,16 +119,6 @@ export default function RunActiveScreen() {
       pace: paceLabel,
       caloriesBurned,
     });
-    actions.setRunSession({
-      id: `run_${Date.now()}`,
-      startedAt: startedAtRef.current,
-      endedAt: new Date().toISOString(),
-      distanceKm: distanceKmFinal,
-      currentPaceSec: paceSecPerKm,
-      durationSec: elapsedSec,
-      caloriesBurned,
-      active: false,
-    });
     router.back();
   }, [actions, caloriesBurned, distanceKm, elapsedSec, paceLabel, router]);
 
@@ -126,7 +142,7 @@ export default function RunActiveScreen() {
       <Header
         transparent
         title="Active run"
-        subtitle={paused ? 'Paused' : 'Tracking'}
+        subtitle={paused ? 'Paused' : gpsStatus}
         rightIcon="x"
         onRightPress={handleDiscard}
       />
@@ -182,8 +198,8 @@ export default function RunActiveScreen() {
             testID="run-stat-calories"
           />
           <StatTile
-            label="Effort"
-            value="Zone 3"
+            label="Tracking"
+            value={paused ? 'Paused' : 'GPS'}
             unit=""
             accent="#7C3AED"
             tiny

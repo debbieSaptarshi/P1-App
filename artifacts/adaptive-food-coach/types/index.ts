@@ -79,6 +79,10 @@ export interface OnboardingState {
 }
 
 export interface FoodItem {
+  source?: 'manual' | 'ai' | 'barcode' | 'catalog';
+  analysisId?: string;
+  confidence?: number;
+  warnings?: string[];
   id: string;
   name: string;
   brand?: string;
@@ -179,6 +183,7 @@ export interface MilestoneBadge {
 }
 
 export interface GroupPost {
+  authorId?: string;
   id: string;
   groupId: string;
   authorName: string;

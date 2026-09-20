@@ -1,3 +1,8 @@
+import { Alert } from 'react-native';
+import * as Crypto from 'expo-crypto';
+import { api, errorMessage } from '@/services/api';
+import { demoMode } from '@/services/supabase';
+import { refreshCommunity } from '@/hooks/useAppStore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
@@ -76,9 +81,14 @@ export default function GroupDetailScreen() {
     }
   };
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = draft.trim();
     if (!trimmed) return;
+    if (!demoMode) {
+      try { await api(`/community/groups/${group.id}/posts`, { method: 'POST', body: { id: Crypto.randomUUID(), body: trimmed } }); setDraft(''); await refreshCommunity(); }
+      catch (error) { Alert.alert('Unable to post', errorMessage(error)); }
+      return;
+    }
     const newPost: GroupPost = {
       id: `local_${Date.now()}`,
       groupId: group.id,

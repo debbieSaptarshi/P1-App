@@ -14,12 +14,9 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, scanFromURLAsync } from 'expo-camera';
 import { LiveCamera } from '@/components/scan/LiveCamera';
-import {
-  SCAN_BARCODE_FALLBACK_ID,
-  SCAN_FOOD_FALLBACK_ID,
-  SCAN_LABEL_FALLBACK_ID,
-  resolveBarcodeFoodId,
-} from '@/constants/scanLookup';
+import { analyzeFood, lookupBarcode, requestAiConsent } from '@/services/ai';
+import { errorMessage } from '@/services/api';
+import { useAppStore } from '@/hooks/useAppStore';
 
 const iconClose = require('@/assets/images/scan/icon-close.svg');
 const iconHelp = require('@/assets/images/scan/icon-help.svg');
@@ -54,13 +51,14 @@ const MODES: { id: ScanMode; label: string; icon: number }[] = [
 ];
 
 const HELP_COPY: Record<ScanMode, string> = {
-  food: 'Fill the frame with your meal, then tap the shutter. We’ll match it to a food in your database.',
+  food: 'Fill the frame with your meal, then tap the shutter. We’ll estimate the foods and portions for you to review.',
   barcode: 'Line up the barcode inside the frame. We’ll look it up as soon as it reads.',
   label: 'Align the nutrition facts label, then tap the shutter.',
 };
 
 export default function FoodCameraScreen() {
   const router = useRouter();
+  const { state } = useAppStore();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
   const barcodeLock = useRef(false);
@@ -87,84 +85,45 @@ export default function FoodCameraScreen() {
     setMode(next);
   };
 
-  const handleBarcode = (code: string) => {
-    if (barcodeLock.current) return;
-    barcodeLock.current = true;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    openResult(resolveBarcodeFoodId(code) ?? SCAN_BARCODE_FALLBACK_ID);
+  const handleBarcode = async (code: string) => {
+    if (barcodeLock.current || capturing) return;
+    barcodeLock.current = true; setCapturing(true);
+    try { await lookupBarcode(code); router.push('/scan/review'); }
+    catch (error) { Alert.alert('Barcode lookup', errorMessage(error)); }
+    finally { setCapturing(false); barcodeLock.current = false; }
   };
-
+  const analyze = async (uri: string, base64?: string, mediaType = 'image/jpeg') => {
+    await requestAiConsent(state.preferences.aiConsent);
+    await analyzeFood({ kind: mode === 'label' ? 'label' : 'food', uri, base64, mediaType });
+    router.push('/scan/review');
+  };
   const handleCapture = async () => {
     if (capturing) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (mode === 'barcode') { Alert.alert('Scan a barcode', 'Hold the barcode inside the frame for automatic detection.'); return; }
     setCapturing(true);
     try {
-      const photo = await cameraRef.current?.takePictureAsync({
-        quality: 0.7,
-        skipProcessing: true,
-      });
-      if (mode === 'label') {
-        openResult(SCAN_LABEL_FALLBACK_ID, photo?.uri);
-        return;
-      }
-      if (mode === 'barcode') {
-        if (photo?.uri) {
-          try {
-            const codes = await scanFromURLAsync(photo.uri);
-            const first = codes[0]?.data;
-            if (first) {
-              handleBarcode(first);
-              return;
-            }
-          } catch {
-            // iOS gallery/photo barcode scan only supports QR; fall through.
-          }
-        }
-        openResult(SCAN_BARCODE_FALLBACK_ID, photo?.uri);
-        return;
-      }
-      openResult(SCAN_FOOD_FALLBACK_ID, photo?.uri);
-    } catch {
-      const fallback =
-        mode === 'label'
-          ? SCAN_LABEL_FALLBACK_ID
-          : mode === 'barcode'
-            ? SCAN_BARCODE_FALLBACK_ID
-            : SCAN_FOOD_FALLBACK_ID;
-      openResult(fallback);
-    } finally {
-      setCapturing(false);
-    }
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.65, base64: true });
+      if (!photo?.uri) throw new Error('The camera is not ready. Please try again.');
+      await analyze(photo.uri, photo.base64);
+    } catch (error) { Alert.alert('Could not analyze photo', errorMessage(error)); }
+    finally { setCapturing(false); }
   };
-
   const handleGallery = async () => {
-    Haptics.selectionAsync();
+    if (capturing) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Photos needed', 'Allow photo access to pick a meal, barcode, or label image.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
+    if (!permission.granted) { Alert.alert('Photos needed', 'Allow access to choose a food photo.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.65, base64: true });
     if (result.canceled || !result.assets[0]?.uri) return;
-    const uri = result.assets[0].uri;
+    const asset = result.assets[0];
     if (mode === 'barcode') {
-      try {
-        const codes = await scanFromURLAsync(uri);
-        const first = codes[0]?.data;
-        if (first) {
-          handleBarcode(first);
-          return;
-        }
-      } catch {
-        // Continue with fallback match.
-      }
-      openResult(SCAN_BARCODE_FALLBACK_ID, uri);
+      try { const codes = await scanFromURLAsync(asset.uri); if (!codes[0]?.data) throw new Error('No barcode found. Try the live camera or enter the barcode manually.'); await handleBarcode(codes[0].data); }
+      catch (error) { Alert.alert('Barcode lookup', errorMessage(error)); }
       return;
     }
-    openResult(mode === 'label' ? SCAN_LABEL_FALLBACK_ID : SCAN_FOOD_FALLBACK_ID, uri);
+    setCapturing(true);
+    try { await analyze(asset.uri, asset.base64 ?? undefined, asset.mimeType ?? 'image/jpeg'); }
+    catch (error) { Alert.alert('Could not analyze photo', errorMessage(error)); }
+    finally { setCapturing(false); }
   };
 
   return (
@@ -234,6 +193,7 @@ export default function FoodCameraScreen() {
       </View>
 
       <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        {capturing ? <Text style={{ color: '#fff', textAlign: 'center', marginBottom: 12 }}>Analyzing…</Text> : null}
         <View style={styles.zoomPill}>
           {(['0.5', '1x'] as const).map((level) => {
             const selected = zoom === level;

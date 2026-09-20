@@ -17,7 +17,10 @@
     },
     "android": {
       "package": "com.anonymous.adaptivefoodcoach",
-      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -35,6 +38,21 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Adaptive Food Coach to choose photos of meals and labels."
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Adaptive Food Coach to transcribe your food and exercise descriptions.",
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Adaptive Food Coach to measure the distance of your runs while the app is open."
         }
       ]
     ],

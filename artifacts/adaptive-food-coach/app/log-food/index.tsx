@@ -1,3 +1,4 @@
+import { localDate } from '@/services/dates';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
@@ -91,7 +92,7 @@ export default function LogFoodIndexScreen() {
 
   const handleQuickLog = useCallback(
     (food: FoodItem) => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDate();
       actions.logFood({
         date: today,
         mealType: 'lunch',

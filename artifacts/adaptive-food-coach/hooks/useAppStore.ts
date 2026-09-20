@@ -1,3 +1,4 @@
+import { localDate } from '@/services/dates';
 /**
  * Global app store backed by React state and persisted via AsyncStorage.
  * Mirrors the Figma "Light Mode" sample data and exposes typed actions for
@@ -5,6 +6,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, AppState } from 'react-native';
+import * as Crypto from 'expo-crypto';
+import type { User } from '@supabase/supabase-js';
+import { demoMode, supabase } from '@/services/supabase';
+import { CloudSync, type SyncStatus } from '@/services/cloud-sync';
+import { fromRecords, toRecords } from '@/services/records';
+import { clearReminders } from '@/services/notifications';
+import { api, errorMessage } from '@/services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   AccountabilityGroup,
@@ -42,7 +51,9 @@ import {
 const STORAGE_KEY = '@adaptive_food_coach/v2';
 
 interface PersistedState {
+  steps: { date: string; count: number; source: 'manual'|'device' }[];
   profile: UserProfile;
+  preferences: { reminders?: {daily?:boolean;weekly?:boolean;sound?:boolean}; aiConsent?: boolean; theme?: 'light'|'dark'|'system'; notifications?: boolean };
   onboarding: OnboardingState;
   foodDatabase: FoodItem[];
   foodLogs: DailyFoodLog[];
@@ -58,6 +69,8 @@ interface PersistedState {
 }
 
 const initialState: PersistedState = {
+  steps: [],
+  preferences: {},
   profile: seedProfile,
   onboarding: {
     stepIndex: 0,
@@ -79,7 +92,25 @@ const initialState: PersistedState = {
   challenges: seedChallenges,
 };
 
-let singletonState: PersistedState = initialState;
+function emptyState(user?: User): PersistedState {
+  const now = new Date().toISOString();
+  return { ...initialState,
+    profile: { ...seedProfile, id: user?.id ?? '', name: user?.user_metadata?.name ?? '', email: user?.email ?? '', avatar: undefined,
+      gender: 'prefer_not_to_say', dateOfBirth: '', heightCm: 0, currentWeightKg: 0, targetWeightKg: 0,
+      workoutFrequency: 'never', goals: [], allergies: [], createdAt: now, updatedAt: now },
+    onboarding: { ...initialState.onboarding, answers: {} }, preferences: {},
+    foodLogs: [], savedFoods: [], mealRecipes: [], exerciseLogs: [], weightHistory: [],
+    milestones: seedMilestones.map(m => ({ ...m, unlocked: false, progress: 0, unlockedAt: undefined })),
+    groups: [], groupPosts: [], leaderboard: [], challenges: [],
+  };
+}
+let singletonState: PersistedState = demoMode ? initialState : emptyState();
+let cloud: CloudSync | null = null;
+let activeUser: User | undefined;
+let accountGeneration = 0;
+let syncStatus: SyncStatus = 'loading';
+let syncMessage = '';
+let initializing: Promise<void> | null = null;
 const subscribers = new Set<() => void>();
 let hydrated = false;
 
@@ -88,7 +119,7 @@ function notify() {
 }
 
 async function hydrate() {
-  if (hydrated) return;
+  if (!demoMode || hydrated) return;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -114,18 +145,67 @@ async function hydrate() {
 }
 
 async function persist(next: PersistedState) {
+  if (!demoMode && !cloud) throw new Error('Sign in before saving changes.');
   singletonState = next;
   notify();
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    if (demoMode) await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    else await cloud!.commit(toRecords(next));
   } catch (err) {
-    if (__DEV__) {
-      console.warn('Failed to persist store', err);
-    }
+    syncStatus = 'error'; syncMessage = errorMessage(err); notify();
   }
 }
 
 void hydrate();
+
+export async function initializeAccount(user: User | null) {
+  if (!user) void clearReminders();
+  if (activeUser?.id === user?.id && hydrated && cloud) return;
+  if (activeUser?.id === user?.id && initializing) return initializing;
+  const generation = ++accountGeneration;
+  cloud?.close(); cloud = null; activeUser = user ?? undefined;
+  singletonState = demoMode ? initialState : emptyState(user ?? undefined);
+  hydrated = demoMode || !user; syncStatus = user ? 'loading' : 'synced'; syncMessage = ''; notify();
+  if (!user || demoMode) return;
+  const instance = new CloudSync(user.id, (records, status, message) => {
+    if (generation !== accountGeneration) return;
+    syncStatus = status; syncMessage = message;
+    if (status !== 'loading' && !(status === 'error' && !hydrated)) {
+      const community = { groups: singletonState.groups, groupPosts: singletonState.groupPosts, challenges: singletonState.challenges, leaderboard: singletonState.leaderboard };
+      singletonState = { ...fromRecords(records, emptyState(user)), ...community };
+      hydrated = true;
+    }
+    notify();
+  }, { storage: AsyncStorage, request: api, uuid: Crypto.randomUUID });
+  cloud = instance;
+  initializing = instance.initialize().then(async () => {
+    if (generation === accountGeneration) { hydrated = true; notify(); await refreshCommunity(); }
+  }).finally(() => { if (generation === accountGeneration) initializing = null; });
+  return initializing;
+}
+export async function refreshCommunity() {
+  if (demoMode || !activeUser) return;
+  const generation = accountGeneration;
+  try {
+    const result = await api<Pick<PersistedState,'groups'|'groupPosts'|'challenges'|'leaderboard'>>('/community');
+    if (generation !== accountGeneration) return;
+    singletonState = { ...singletonState, ...result }; notify();
+  } catch (error) { if (generation === accountGeneration) { syncMessage = errorMessage(error); notify(); } }
+}
+async function communityAction(path: string, body: unknown, method = 'PUT') {
+  try { await api(`/community${path}`, { method, body }); await refreshCommunity(); }
+  catch (error) { Alert.alert('Could not update community', errorMessage(error)); }
+}
+export async function clearAccountCache() { cloud?.close(); await cloud?.clearCache(); await clearReminders(); }
+export const retrySync = () => cloud?.flush();
+export const resolveSyncConflict = (keepLocal: boolean) => cloud?.resolveConflict(keepLocal);
+export async function signOutAccount() {
+  if (cloud && (syncStatus !== 'synced')) throw new Error('Sync or resolve your pending changes before signing out.');
+  const instance = cloud;
+  const { error } = await supabase!.auth.signOut(); if (error) throw error;
+  await instance?.clearCache(); await clearReminders(); await initializeAccount(null);
+}
+AppState.addEventListener('change', state => { if (state === 'active' && cloud) { void cloud.flush(); void refreshCommunity(); } });
 
 function update(patch: Partial<PersistedState>) {
   return persist({ ...singletonState, ...patch });
@@ -160,8 +240,11 @@ function dayLog(date: string): DailyFoodLog {
 
 export const appStoreActions = {
   reset() {
-    return persist(initialState);
+    return demoMode ? persist(initialState) : signOutAccount();
   },
+  setSteps(date: string, count: number) { return update({ steps: [...singletonState.steps.filter(s => s.date !== date), { date, count, source: 'manual' }] }); },
+  updatePreferences(patch: Partial<PersistedState['preferences']>) { return update({ preferences: { ...singletonState.preferences, ...patch } }); },
+  setAiConsent(consent: boolean) { return update({ preferences: { ...singletonState.preferences, aiConsent: consent } }); },
   setProfile(profile: UserProfile) {
     return update({ profile });
   },
@@ -200,8 +283,13 @@ export const appStoreActions = {
       profile,
     });
   },
+  logFoods(foods: { food: FoodItem; quantity: number }[], mealType: MealType, date: string) {
+    const today = dayLog(date);
+    const entries = [...today.entries, ...foods.map(({ food, quantity }) => ({ id: Crypto.randomUUID(), loggedAt: new Date().toISOString(), date, mealType, food, quantity }))];
+    return update({ foodLogs: [...singletonState.foodLogs.filter(d => d.date !== date), { ...today, entries, totals: totalsFor(entries) }], foodDatabase: [...singletonState.foodDatabase.filter(f => !foods.some(x => x.food.id === f.id)), ...foods.map(x => x.food)] });
+  },
   logFood(entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) {
-    const id = `fdl_${Date.now()}`;
+    const id = Crypto.randomUUID();
     const loggedAt = new Date().toISOString();
     const newEntry: FoodLogEntry = { id, loggedAt, ...entry };
     const today = dayLog(entry.date);
@@ -210,6 +298,10 @@ export const appStoreActions = {
     return update({
       foodLogs: [...others, { ...today, date: entry.date, entries, totals: totalsFor(entries) }],
     });
+  },
+  updateFoodLog(date: string, entryId: string, patch: Partial<Pick<FoodLogEntry, 'quantity'|'mealType'|'food'>>) {
+    const day = dayLog(date); const entries = day.entries.map(e => e.id === entryId ? { ...e, ...patch } : e);
+    return update({ foodLogs: [...singletonState.foodLogs.filter(d => d.date !== date), { ...day, entries, totals: totalsFor(entries) }] });
   },
   deleteFoodLog(date: string, entryId: string) {
     const others = singletonState.foodLogs.filter((d) => d.date !== date);
@@ -243,7 +335,7 @@ export const appStoreActions = {
   logExercise(entry: Omit<ExerciseLog, 'id'>) {
     return update({
       exerciseLogs: [
-        { id: `ex_${Date.now()}`, ...entry },
+        { id: Crypto.randomUUID(), ...entry },
         ...singletonState.exerciseLogs,
       ],
     });
@@ -251,7 +343,7 @@ export const appStoreActions = {
   addWeight(entry: Omit<WeightEntry, 'id'>) {
     return update({
       weightHistory: [
-        { id: `wh_${Date.now()}`, ...entry },
+        { id: Crypto.randomUUID(), ...entry },
         ...singletonState.weightHistory,
       ],
       profile: { ...singletonState.profile, currentWeightKg: entry.weightKg, updatedAt: new Date().toISOString() },
@@ -265,16 +357,19 @@ export const appStoreActions = {
     });
   },
   joinGroup(id: string) {
+    if (!demoMode) return communityAction(`/groups/${id}/membership`, { joined: true });
     return update({
       groups: singletonState.groups.map((g) => (g.id === id ? { ...g, joined: true, members: g.members + 1 } : g)),
     });
   },
   leaveGroup(id: string) {
+    if (!demoMode) return communityAction(`/groups/${id}/membership`, { joined: false });
     return update({
       groups: singletonState.groups.map((g) => (g.id === id ? { ...g, joined: false, members: Math.max(0, g.members - 1) } : g)),
     });
   },
   likePost(id: string) {
+    if (!demoMode) return communityAction(`/posts/${id}/like`, { liked: !singletonState.groupPosts.find(p => p.id === id)?.liked });
     return update({
       groupPosts: singletonState.groupPosts.map((p) =>
         p.id === id ? { ...p, liked: !p.liked, reactions: p.reactions + (p.liked ? -1 : 1) } : p,
@@ -282,6 +377,7 @@ export const appStoreActions = {
     });
   },
   joinChallenge(id: string) {
+    if (!demoMode) return communityAction(`/challenges/${id}/membership`, { joined: true });
     return update({
       challenges: singletonState.challenges.map((c) => (c.id === id ? { ...c, joined: true, participants: c.participants + 1 } : c)),
     });
@@ -317,10 +413,10 @@ export function useAppStore() {
     };
   }, []);
 
-  const state = useMemo(() => singletonState, [singletonState]);
+  const state = singletonState;
 
   const todaysFoodLog = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDate();
     return state.foodLogs.find((d) => d.date === today) ?? emptyDay(today);
   }, [state.foodLogs]);
 
@@ -336,8 +432,9 @@ export function useAppStore() {
     let streak = 0;
     let cursor = new Date();
     for (let i = 0; i < 30; i++) {
-      const iso = cursor.toISOString().slice(0, 10);
+      const iso = localDate(cursor);
       if (sorted.some((d) => d.date === iso)) streak += 1;
+      else if (i > 0) break;
       cursor = new Date(cursor.getTime() - 86_400_000);
     }
     return streak;
@@ -354,6 +451,8 @@ export function useAppStore() {
 
   return {
     hydrated,
+    syncStatus,
+    syncMessage,
     state,
     todaysFoodLog,
     foodLogForDate,

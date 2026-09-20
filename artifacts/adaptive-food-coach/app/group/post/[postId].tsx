@@ -1,6 +1,11 @@
+import { Alert } from 'react-native';
+import * as Crypto from 'expo-crypto';
+import { api, errorMessage } from '@/services/api';
+import { demoMode } from '@/services/supabase';
+import { refreshCommunity } from '@/hooks/useAppStore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -50,10 +55,17 @@ export default function PostDetailScreen() {
   const { state, hydrated } = useAppStore();
   const [comments, setComments] = useState<CommentDraft[]>([]);
   const [draft, setDraft] = useState('');
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const loadComments = async (offset = 0) => {
+    if (demoMode) return;
+    try { const result = await api<{comments:CommentDraft[];nextOffset:number|null}>(`/community/posts/${id}/comments?offset=${offset}`); setComments(prev => offset ? [...prev, ...result.comments] : result.comments); setNextOffset(result.nextOffset); }
+    catch (error) { Alert.alert('Unable to load comments', errorMessage(error)); }
+  };
+  useEffect(() => { void loadComments(); }, [id]);
 
   const livePost = state.groupPosts.find((p) => p.id === id);
   const fallback = useMemo<CommentDraft[]>(
-    () => SAMPLE_REPLIES[id] ?? defaultComments(),
+    () => demoMode ? (SAMPLE_REPLIES[id] ?? defaultComments()) : [],
     [id],
   );
   const allComments = [...comments, ...fallback].sort((a, b) =>
@@ -81,9 +93,14 @@ export default function PostDetailScreen() {
     );
   }
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = draft.trim();
     if (!trimmed) return;
+    if (!demoMode) {
+      try { await api(`/community/posts/${id}/comments`, { method: 'POST', body: { id: Crypto.randomUUID(), body: trimmed } }); setDraft(''); await loadComments(); await refreshCommunity(); }
+      catch (error) { Alert.alert('Unable to comment', errorMessage(error)); }
+      return;
+    }
     setComments((prev) => [
       ...prev,
       {
@@ -122,6 +139,11 @@ export default function PostDetailScreen() {
               </View>
             </View>
             <Text style={styles.body}>{livePost.body}</Text>
+            {!demoMode && livePost.authorId !== state.profile.id ? <View style={{ flexDirection: 'row', gap: 20, marginTop: 16 }}>
+              <Pressable onPress={async () => { try { await api(`/community/posts/${id}/report`, { method: 'POST', body: { reason: 'Reported by a community member for review' } }); Alert.alert('Report received', 'This post has been queued for review.'); } catch (e) { Alert.alert('Could not report', errorMessage(e)); } }}><Text>Report post</Text></Pressable>
+              <Pressable onPress={async () => { try { await api(`/community/users/${livePost.authorId}/block`, { method: 'PUT', body: { blocked: true } }); await refreshCommunity(); router.back(); } catch (e) { Alert.alert('Could not block', errorMessage(e)); } }}><Text>Block author</Text></Pressable>
+            </View> : null}
+            {!demoMode && livePost.authorId === state.profile.id ? <Button title="Delete my post" onPress={async () => { try { await api(`/community/posts/${id}`, { method: 'DELETE' }); await refreshCommunity(); router.back(); } catch (e) { Alert.alert('Could not delete post', errorMessage(e)); } }} /> : null}
             <View style={styles.actions}>
               <Pressable
                 accessibilityRole="button"
@@ -163,6 +185,7 @@ export default function PostDetailScreen() {
           {!hydrated && (
             <Text style={styles.loadingHint}>Loading more comments…</Text>
           )}
+          {nextOffset !== null ? <Button title="Load more replies" onPress={() => void loadComments(nextOffset)} /> : null}
         </ScrollView>
 
         <View style={[styles.compose, { paddingBottom: insets.bottom + spacing.sm }]}>

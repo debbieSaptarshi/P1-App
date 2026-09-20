@@ -13,13 +13,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Button, Header, TextField } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/tokens';
-import { useAppStore } from '@/hooks/useAppStore';
+import { initializeAccount } from '@/hooks/useAppStore';
+import { authClient } from '@/services/supabase';
+import { errorMessage } from '@/services/api';
 
 export default function SignInScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { actions, state } = useAppStore();
 
+
+  const [error, setError] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -31,11 +34,11 @@ export default function SignInScreen() {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      // Persist a stubbed auth session by seeding the profile with the typed
-      // email but otherwise preserving the existing profile fields.
-      await actions.setProfile({ ...state.profile, email: email.trim() });
-      router.replace('/(onboarding)/welcome');
+      setError('');
+      const { data, error } = await authClient().auth.signInWithPassword({ email: email.trim(), password });
+      if (error) throw error;
+      await initializeAccount(data.user);
+    } catch (error) { setError(errorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -65,6 +68,7 @@ export default function SignInScreen() {
         </View>
 
         <View style={styles.form}>
+          {error ? <Text accessibilityRole="alert" style={{ color: '#b42318' }}>{error}</Text> : null}
           <TextField
             label="Email"
             value={email}

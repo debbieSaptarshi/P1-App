@@ -1,3 +1,4 @@
+import { localDate } from '@/services/dates';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
@@ -69,7 +70,7 @@ export default function ScanResultScreen() {
 
   const handleLog = useCallback(() => {
     if (!food || !totals) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDate();
     actions.logFood({
       date: today,
       mealType,

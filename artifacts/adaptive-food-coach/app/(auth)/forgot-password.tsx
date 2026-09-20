@@ -15,6 +15,9 @@ import { Alert } from 'react-native';
 import { Button, Header, TextField } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/tokens';
 
+import { authClient } from '@/services/supabase';
+import { errorMessage } from '@/services/api';
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ForgotPasswordScreen() {
@@ -39,10 +42,12 @@ export default function ForgotPasswordScreen() {
     if (!emailValid || submitting) return;
     setSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const { error } = await authClient().auth.resetPasswordForEmail(email.trim());
+      if (error) throw error;
       setSentHint(true);
-      showFeedback(`OTP sent to ${email.trim()}`);
-      router.push('/(auth)/verify-otp');
+      showFeedback('If an account exists, a recovery code will arrive shortly.');
+      router.push({ pathname: '/(auth)/verify-otp', params: { email: email.trim(), type: 'recovery' } });
+    } catch (error) { Alert.alert('Unable to send code', errorMessage(error));
     } finally {
       setSubmitting(false);
     }

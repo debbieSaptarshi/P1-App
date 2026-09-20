@@ -14,12 +14,16 @@ import { Feather } from '@expo/vector-icons';
 import { Button, Header, TextField } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/tokens';
 
+import { authClient } from '@/services/supabase';
+import { errorMessage } from '@/services/api';
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +34,7 @@ export default function RegisterScreen() {
   const [touched, setTouched] = useState(false);
 
   const emailValid = EMAIL_RE.test(email.trim());
-  const passwordValid = password.length >= 6;
+  const passwordValid = password.length >= 8;
   const confirmValid = password === confirm;
   const nameValid = name.trim().length >= 2;
 
@@ -39,17 +43,20 @@ export default function RegisterScreen() {
 
   const emailError = touched && !emailValid ? 'Enter a valid email' : undefined;
   const passwordError =
-    touched && !passwordValid ? 'Use at least 6 characters' : undefined;
+    touched && !passwordValid ? 'Use at least 8 characters' : undefined;
   const confirmError =
-    touched && password.length >= 6 && !confirmValid ? 'Passwords do not match' : undefined;
+    touched && password.length >= 8 && !confirmValid ? 'Passwords do not match' : undefined;
 
   const handleSubmit = async () => {
     setTouched(true);
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      router.replace('/(onboarding)/welcome');
+      setError('');
+      const { data, error } = await authClient().auth.signUp({ email: email.trim(), password, options: { data: { name: name.trim() } } });
+      if (error) throw error;
+      if (!data.session) router.replace({ pathname: '/(auth)/verify-otp', params: { email: email.trim(), type: 'signup' } });
+    } catch (error) { setError(errorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -79,6 +86,7 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.form}>
+          {error ? <Text accessibilityRole="alert" style={{ color: '#b42318' }}>{error}</Text> : null}
           <TextField
             label="Full name"
             value={name}

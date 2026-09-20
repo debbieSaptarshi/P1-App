@@ -1,3 +1,6 @@
+import { demoMode } from '@/services/supabase';
+import { recentMeals } from '@/services/recent-meals';
+import { useAppStore } from '@/hooks/useAppStore';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +20,8 @@ const iconBack = require('@/assets/images/nutrition/icon-back.svg');
  */
 export default function LastMealListScreen() {
   const router = useRouter();
+  const { state } = useAppStore();
+  const meals = demoMode ? LAST_MEALS : recentMeals(state.foodLogs);
   const insets = useSafeAreaInsets();
 
   return (
@@ -37,12 +42,13 @@ export default function LastMealListScreen() {
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        {LAST_MEALS.map((dish) => (
+        {!meals.length ? <Text>No meals logged yet.</Text> : null}
+        {meals.map((dish) => (
           <View key={dish.id} style={styles.item}>
             {dish.addedBy ? <Text style={styles.addedBy}>{dish.addedBy}</Text> : null}
             <LastMealCard
               dish={dish}
-              onPress={() => router.push(`/log-food/dish/${dish.id}`)}
+              onPress={() => router.push(demoMode ? `/log-food/dish/${dish.id}` : `/log-food/detail/${dish.id}`)}
             />
           </View>
         ))}

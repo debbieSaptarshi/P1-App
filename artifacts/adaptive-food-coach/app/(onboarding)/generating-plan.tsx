@@ -16,6 +16,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Button, ProgressBar } from '@/components/ui';
+import { useAppStore } from '@/hooks/useAppStore';
 import { colors, radii, spacing } from '@/constants/tokens';
 
 const TOTAL_STEPS = 10;
@@ -28,6 +29,7 @@ const STEP_NUM = 9;
  */
 export default function GeneratingPlanScreen() {
   const router = useRouter();
+  const { actions, state } = useAppStore();
   const insets = useSafeAreaInsets();
 
   const [progress, setProgress] = useState(0);
@@ -52,12 +54,12 @@ export default function GeneratingPlanScreen() {
   }, [pulse]);
 
   useEffect(() => {
-    // Run a 3-stage progression so the user perceives real activity.
-    stageTimers.current.push(setTimeout(() => setStage(1), 600));
-    stageTimers.current.push(setTimeout(() => setStage(2), 1500));
-    stageTimers.current.push(setTimeout(() => setStage(3), 2400));
-    stageTimers.current.push(setTimeout(() => setProgress(100), 3300));
-    stageTimers.current.push(setTimeout(() => router.replace('/(onboarding)/complete'), 3850));
+    let active = true;
+    setStage(1); setProgress(30);
+    void actions.advanceOnboarding(9, state.onboarding.answers).then(() => {
+      if (active) { setStage(3); setProgress(100); router.replace('/(onboarding)/complete'); }
+    });
+    return () => { active = false; };
   }, [router]);
 
   const pulseStyle = useAnimatedStyle(() => ({
@@ -82,10 +84,9 @@ export default function GeneratingPlanScreen() {
           </Animated.View>
         </Animated.View>
 
-        <Text style={styles.title}>Building your adaptive plan…</Text>
+        <Text style={styles.title}>Saving your preferences…</Text>
         <Text style={styles.subtitle}>
-          We&apos;re crunching your responses to find meals, workouts and habit nudges that fit
-          your goals.
+          Your answers will be available across your devices. You can ask the coach for meal ideas after setup.
         </Text>
 
         <View style={styles.stageList}>

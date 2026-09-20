@@ -1,3 +1,9 @@
+import { localDate } from '@/services/dates';
+import { Alert } from 'react-native';
+import * as Crypto from 'expo-crypto';
+import { VoiceInput } from '@/components/VoiceInput';
+import { api, errorMessage } from '@/services/api';
+import { requestAiConsent } from '@/services/ai';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
@@ -124,7 +130,7 @@ function estimateCalories(
     other: 5.5,
   };
   const hours = duration / 60;
-  return Math.round(base[type] * hours * (weightKg / 75));
+  return Math.round(base[type] * hours * weightKg);
 }
 
 const EXAMPLE_DESCRIPTIONS: string[] = [
@@ -147,6 +153,8 @@ export default function VoiceDescriberScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { state, actions } = useAppStore();
+  const [aiResult, setAiResult] = useState<{ type: ExerciseType; durationMinutes: number; caloriesBurned: number; distanceKm: number | null; notes: string } | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const [description, setDescription] = useState('');
   const [overrideType, setOverrideType] = useState<ExerciseType | null>(null);
 
@@ -156,17 +164,19 @@ export default function VoiceDescriberScreen() {
     () => deriveType(description),
     [description],
   );
-  const finalType = overrideType ?? detection.type;
+  const finalType = overrideType ?? aiResult?.type ?? detection.type;
 
-  const duration = useMemo(
+  const parsedDuration = useMemo(
     () => deriveDurationMinutes(description),
     [description],
   );
-  const calories = useMemo(
+  const duration = aiResult?.durationMinutes ?? parsedDuration;
+  const heuristicCalories = useMemo(
     () => estimateCalories(finalType, duration, weightKg),
     [duration, finalType, weightKg],
   );
 
+  const calories = aiResult?.caloriesBurned ?? heuristicCalories;
   const handleUseExample = useCallback(
     (example: string) => {
       Haptics.selectionAsync();
@@ -180,17 +190,18 @@ export default function VoiceDescriberScreen() {
 
   const handleLog = useCallback(() => {
     if (!canLog) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDate();
     actions.logExercise({
       date: today,
       type: finalType,
       durationMinutes: duration,
       caloriesBurned: calories,
       notes: description.trim(),
+      distanceKm: aiResult?.distanceKm ?? undefined,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
-  }, [actions, calories, canLog, description, duration, finalType, router]);
+  }, [actions, aiResult, calories, canLog, description, duration, finalType, router]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -209,27 +220,11 @@ export default function VoiceDescriberScreen() {
       >
         <View style={styles.heroCard}>
           <View style={styles.heroHeader}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Tap to dictate"
-              testID="voice-mic"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                setDescription((prev) =>
-                  prev.length === 0
-                    ? 'Ran 5.2 km in 32 min, felt good.'
-                    : prev,
-                );
-              }}
-              hitSlop={8}
-              style={({ pressed }) => [styles.mic, pressed && styles.pressed]}
-            >
-              <Feather name="mic" size={28} color="#FFFFFF" />
-            </Pressable>
+            <VoiceInput onText={text => { setDescription(text); setAiResult(null); }} />
             <View style={styles.heroText}>
               <Text style={styles.heroTitle}>Listen + log</Text>
               <Text style={styles.heroBody}>
-                Tap the mic to capture a sample, or type freely. We&apos;ll
+                Record a description or type freely. We&apos;ll
                 classify the activity for you and pre-fill the calorie
                 estimate.
               </Text>
@@ -241,13 +236,16 @@ export default function VoiceDescriberScreen() {
           label="Workout description"
           placeholder="e.g. 30 min spin class, pushed hard"
           value={description}
-          onChangeText={setDescription}
+          onChangeText={text => { setDescription(text); setAiResult(null); }}
           multiline
           numberOfLines={4}
           autoCapitalize="sentences"
           testID="voice-input"
         />
 
+        <Button title="Analyze with AI" loading={analyzing} disabled={analyzing || !description.trim()} onPress={async () => {
+          setAnalyzing(true); try { await requestAiConsent(state.preferences.aiConsent); const result = await api<{type:ExerciseType;durationMinutes:number;caloriesBurned:number;distanceKm:number|null;notes:string}>('/ai/exercise', { method:'POST', idempotencyKey:Crypto.randomUUID(), body:{message:description,consent:true} }); setAiResult(result); setOverrideType(null); } catch (e) { Alert.alert('Unable to analyze exercise', errorMessage(e)); } finally { setAnalyzing(false); }
+        }} />
         <View style={styles.examples}>
           <Text style={styles.examplesTitle}>Try an example</Text>
           <View style={styles.examplesWrap}>

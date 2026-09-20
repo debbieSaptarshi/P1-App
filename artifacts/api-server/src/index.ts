@@ -1,7 +1,9 @@
 import app from "./app";
+import { config } from "./lib/config";
+config();
 import { logger } from "./lib/logger";
 
-const rawPort = process.env["PORT"];
+const rawPort = process.env["PORT"] ?? "3001";
 
 if (!rawPort) {
   throw new Error(

@@ -1,3 +1,4 @@
+import { localDate } from '@/services/dates';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -24,7 +25,7 @@ export default function WeightEditScreen() {
       updatedAt: new Date().toISOString(),
     });
     appStoreActions.addWeight({
-      date: new Date().toISOString().slice(0, 10),
+      date: localDate(),
       weightKg: value,
       note: 'manual edit',
     });

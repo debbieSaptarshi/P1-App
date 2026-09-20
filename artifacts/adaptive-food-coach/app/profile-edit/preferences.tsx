@@ -1,3 +1,6 @@
+import { Alert } from 'react-native';
+import { configureReminders } from '@/services/notifications';
+import { errorMessage } from '@/services/api';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
@@ -9,9 +12,9 @@ import { useAppStore, appStoreActions } from '@/hooks/useAppStore';
 import type { DietPattern, WorkoutFrequency } from '@/types';
 
 interface NotificationToggles {
-  push: boolean;
-  weeklyEmail: boolean;
-  inAppSound: boolean;
+  daily: boolean;
+  weekly: boolean;
+  sound: boolean;
 }
 
 interface ToggleRow {
@@ -22,9 +25,9 @@ interface ToggleRow {
 }
 
 const NOTIFICATION_TOGGLES: ToggleRow[] = [
-  { key: 'push', label: 'Push notifications', description: 'Meal reminders, streak nudges, and weekly check-ins.', icon: 'bell' },
-  { key: 'weeklyEmail', label: 'Weekly email digest', description: 'Summary of your progress every Monday morning.', icon: 'mail' },
-  { key: 'inAppSound', label: 'In-app sounds', description: 'Subtle haptics and tones for key actions.', icon: 'volume-2' },
+  { key: 'daily', label: 'Meal reminders', description: 'Daily at 8 am, 1 pm and 7 pm on this device.', icon: 'bell' },
+  { key: 'weekly', label: 'Weekly review reminder', description: 'A reminder every Monday at 9 am.', icon: 'mail' },
+  { key: 'sound', label: 'Reminder sounds', description: 'Play a sound with scheduled reminders.', icon: 'volume-2' },
 ];
 
 const DIET_OPTIONS: { key: DietPattern; label: string }[] = [
@@ -56,27 +59,26 @@ export default function PreferencesEditScreen() {
   const insets = useSafeAreaInsets();
   const { state } = useAppStore();
   const [notifDraft, setNotifDraft] = useState<NotificationToggles>({
-    push: true,
-    weeklyEmail: false,
-    inAppSound: true,
+    daily: state.preferences.reminders?.daily ?? false,
+    weekly: state.preferences.reminders?.weekly ?? false,
+    sound: state.preferences.reminders?.sound ?? true,
   });
   const [dietDraft, setDietDraft] = useState<DietPattern>(state.profile.dietPattern);
   const [activityDraft, setActivityDraft] = useState<WorkoutFrequency>(state.profile.workoutFrequency);
   const [allergiesDraft, setAllergiesDraft] = useState(state.profile.allergies.join(', '));
 
-  const save = () => {
-    appStoreActions.updateProfile({
+  const save = async () => {
+    try {
+    await configureReminders(notifDraft);
+    await appStoreActions.updatePreferences({ reminders: notifDraft });
+    await appStoreActions.updateProfile({
       dietPattern: dietDraft,
       workoutFrequency: activityDraft,
       allergies: parseAllergies(allergiesDraft),
       updatedAt: new Date().toISOString(),
     });
-    // Notification toggles don't have a typed storage slot yet. We still log
-    // them so the parent has a place to wire persistence later.
-    if (__DEV__) {
-      console.log('[profile-edit/preferences] notification toggles ->', notifDraft);
-    }
     router.back();
+    } catch(error) { Alert.alert('Unable to save preferences', errorMessage(error)); }
   };
 
   return (

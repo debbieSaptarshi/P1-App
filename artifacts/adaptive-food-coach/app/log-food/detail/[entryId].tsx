@@ -1,3 +1,4 @@
+import { localDate } from '@/services/dates';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
@@ -388,7 +389,7 @@ function iconForMeal(m: MealType): 'sunrise' | 'cloud' | 'moon' | 'coffee' {
 }
 
 function formatDate(iso: string): string {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDate();
   if (iso === today) return 'Today';
   const d = new Date(`${iso}T00:00:00`);
   return d.toLocaleDateString(undefined, {

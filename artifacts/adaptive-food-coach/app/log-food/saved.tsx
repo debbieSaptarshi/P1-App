@@ -1,3 +1,4 @@
+import { localDate } from '@/services/dates';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
@@ -100,7 +101,7 @@ export default function SavedFoodsScreen() {
     if (!pendingLog) return;
     const food = savedFoodToFoodItem(pendingLog as SavedFood);
     if (!food) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDate();
     actions.logFood({
       date: today,
       mealType: selectedMeal,

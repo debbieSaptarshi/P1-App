@@ -1,4 +1,7 @@
-import { useRouter } from 'expo-router';
+import { Alert } from 'react-native';
+import { authClient } from '@/services/supabase';
+import { errorMessage } from '@/services/api';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -19,6 +22,8 @@ const OTP_LENGTH = 6;
 
 export default function VerifyOtpScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ email: string; type: string }>();
+  const type = params.type === 'signup' ? 'signup' : 'recovery';
   const insets = useSafeAreaInsets();
 
   const [digits, setDigits] = useState<string[]>(() =>
@@ -48,8 +53,10 @@ export default function VerifyOtpScreen() {
     if (!complete || submitting) return;
     setSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      router.replace('/(auth)/reset-success');
+      const { error } = await authClient().auth.verifyOtp({ email: params.email, token: digits.join(''), type });
+      if (error) throw error;
+      router.replace(type === 'recovery' ? '/(auth)/update-password' : '/(onboarding)/welcome');
+    } catch (error) { Alert.alert('Verification failed', errorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -75,7 +82,7 @@ export default function VerifyOtpScreen() {
           <Text style={styles.title}>Enter the 6-digit code</Text>
           <Text style={styles.subtitle}>
             We just sent a one-time password to your email. Enter it below to continue resetting
-            your password.
+            your account.
           </Text>
         </View>
 
@@ -104,7 +111,7 @@ export default function VerifyOtpScreen() {
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Resend code"
-            onPress={() => setDigits(Array.from({ length: OTP_LENGTH }, () => ''))}
+            onPress={async () => { try { const result = type === 'signup' ? await authClient().auth.resend({ type: 'signup', email: params.email }) : await authClient().auth.resetPasswordForEmail(params.email); if (result.error) throw result.error; setDigits(Array.from({ length: OTP_LENGTH }, () => '')); Alert.alert('Code sent', 'Check your email.'); } catch (e) { Alert.alert('Unable to resend', errorMessage(e)); } }}
           >
             <Text style={styles.resend}>Didn&apos;t get a code? Resend</Text>
           </TouchableOpacity>

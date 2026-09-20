@@ -1,3 +1,5 @@
+import { Alert } from 'react-native';
+import { errorMessage } from '@/services/api';
 import { router, type RelativePathString } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import React, { useState } from 'react';
@@ -154,6 +156,7 @@ export default function ProfileScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        <Pressable onPress={() => router.push('/profile-edit/privacy')} style={{ paddingVertical: 12 }}><Text>Privacy, export & account deletion</Text></Pressable>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.identity}>
@@ -235,8 +238,7 @@ export default function ProfileScreen() {
         title="Sign out?"
       >
         <Text style={styles.confirmBody}>
-          Your data stays on this device, but you’ll need to sign back in to
-          sync your activity.
+          Your synced data stays in your account. Sign in again to access it.
         </Text>
         <View style={styles.confirmRow}>
           <Button
@@ -247,10 +249,8 @@ export default function ProfileScreen() {
           />
           <Button
             title="Sign Out"
-            onPress={() => {
-              setConfirmSignOut(false);
-              appStoreActions.reset();
-              router.replace('/');
+            onPress={async () => {
+              try { await appStoreActions.reset(); setConfirmSignOut(false); router.replace('/(auth)/sign-in'); } catch (error) { Alert.alert('Unable to sign out', errorMessage(error)); }
             }}
             style={styles.confirmBtn}
             testID="signout-confirm"

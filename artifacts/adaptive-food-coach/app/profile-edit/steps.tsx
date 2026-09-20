@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '@/constants/tokens';
-import { Button, Card, Header, ProgressBar, RulerPicker } from '@/components/ui';
+import { Button, Card, Header, ProgressBar, RulerPicker, TextField } from '@/components/ui';
 import { useAppStore, appStoreActions } from '@/hooks/useAppStore';
 
 /**
@@ -17,6 +17,9 @@ export default function StepsEditScreen() {
   const { state } = useAppStore();
   const [value, setValue] = useState<number>(state.profile.dailyStepGoal);
 
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const [steps, setSteps] = useState(String(state.steps.find(s => s.date === today)?.count ?? 0));
   const progress = Math.min(1, value / 15000);
 
   const save = () => {
@@ -65,6 +68,8 @@ export default function StepsEditScreen() {
           </Text>
         </Card>
 
+        <TextField label="Today's steps (manual entry)" keyboardType="number-pad" value={steps} onChangeText={setSteps} />
+        <Button title="Save today's steps" disabled={!/^\d+$/.test(steps) || Number(steps) > 100000} onPress={() => void appStoreActions.setSteps(today, Number(steps))} />
         <Button title="Save Goal" onPress={save} leadingIcon="check" style={styles.saveCta} />
       </ScrollView>
     </View>

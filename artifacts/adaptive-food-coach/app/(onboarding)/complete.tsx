@@ -113,10 +113,9 @@ export default function CompleteScreen() {
 
         <Animated.View style={[styles.textBlock, titleStyle]}>
           <Text style={styles.kicker}>YOU&apos;RE ALL SET</Text>
-          <Text style={styles.title}>Your adaptive plan is ready</Text>
+          <Text style={styles.title}>Your profile is ready</Text>
           <Text style={styles.subtitle}>
-            We&apos;ve crafted a daily cadence of meals, movement and habit prompts based on your
-            answers. Open the dashboard to start your first day.
+            Your preferences are saved. Review your daily targets in Profile and ask the coach for meal ideas.
           </Text>
         </Animated.View>
 
