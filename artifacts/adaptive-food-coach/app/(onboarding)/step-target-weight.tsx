@@ -1,160 +1,80 @@
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { RulerPicker } from '@/components/ui';
-import { StepHeader } from './_components/StepHeader';
-import { colors, radii, spacing } from '@/constants/tokens';
+import type { Goal } from '@/types';
+import { colors } from '@/constants/tokens';
 import { useAppStore } from '@/hooks/useAppStore';
+import { OnboardingShell } from './_components/OnboardingShell';
+import { OnboardingRuler } from './_components/OnboardingRuler';
+import { progressFor, ROUTE_TO_INDEX } from './_components/progress';
 
-const TOTAL_STEPS = 10;
-const STEP_NUM = 5;
-const MIN = 40;
-const MAX = 180;
-const DEFAULT = 70;
+const MIN_KG = 40;
+const MAX_KG = 180;
+
+const GOAL_LABEL: Record<string, string> = {
+  lose_weight: 'Lose Weight',
+  maintain_weight: 'Maintain Weight',
+  gain_muscle: 'Gain Weight',
+};
+
+function clampKg(value: number) {
+  return Number(Math.max(MIN_KG, Math.min(MAX_KG, value)).toFixed(1));
+}
 
 export default function StepTargetWeightScreen() {
   const router = useRouter();
   const { actions, state } = useAppStore();
+  const current =
+    typeof state.onboarding.answers.weight === 'number' ? (state.onboarding.answers.weight as number) : 72;
+  const goals = Array.isArray(state.onboarding.answers.goals) ? (state.onboarding.answers.goals as Goal[]) : [];
+  const goalLabel = GOAL_LABEL[goals[0] ?? ''] ?? 'Lose Weight';
   const initial =
     typeof state.onboarding.answers.targetWeight === 'number'
-      ? (state.onboarding.answers.targetWeight as number)
-      : typeof state.onboarding.answers.weight === 'number'
-        ? (state.onboarding.answers.weight as number) - 3
-        : DEFAULT;
-  const [target, setTarget] = useState<number>(clamp(initial, MIN, MAX));
-
-  const current =
-    typeof state.onboarding.answers.weight === 'number'
-      ? (state.onboarding.answers.weight as number)
-      : 75;
-
-  const delta = useMemo(() => Number((target - current).toFixed(1)), [target, current]);
-
-  const continueHint =
-    delta === 0
-      ? 'Maintaining your current weight — perfect for sustainable habits.'
-      : delta < 0
-        ? `Lose ${Math.abs(delta).toFixed(1)} kg gradually over time.`
-        : `Gain ${delta.toFixed(1)} kg with a smart surplus plan.`;
+      ? clampKg(state.onboarding.answers.targetWeight as number)
+      : clampKg(current);
+  const [target, setTarget] = useState(initial);
 
   const handleContinue = async () => {
-    await actions.advanceOnboarding(5, { targetWeight: target });
-    router.push('/(onboarding)/step-dob');
+    await actions.advanceOnboarding(ROUTE_TO_INDEX['step-barriers'], { targetWeight: target });
+    router.push('/(onboarding)/step-barriers');
   };
 
   return (
-    <StepHeader
-      stepNum={STEP_NUM}
-      totalSteps={TOTAL_STEPS}
-      kicker="GOAL"
-      title="What's your target weight?"
-      subtitle="We design a daily calorie target and pace that adapts to your progress."
+    <OnboardingShell
+      progress={progressFor('step-target-weight')}
+      title="What is your desired weight?"
+      subtitle={null}
       onContinue={handleContinue}
+      bodyCentered
+      flush
     >
-      <View style={styles.card}>
-        <View style={styles.cardSummary}>
-          <View style={styles.summaryCol}>
-            <Text style={styles.summaryLabel}>Current</Text>
-            <Text style={styles.summaryValue}>{current.toFixed(0)} kg</Text>
-          </View>
-          <View style={styles.summaryArrow}>
-            <Feather name="arrow-right" size={18} color={colors.textMuted} />
-          </View>
-          <View style={[styles.summaryCol, styles.summaryColTarget]}>
-            <Text style={styles.summaryLabel}>Target</Text>
-            <Text style={styles.summaryValue}>{target.toFixed(0)} kg</Text>
-          </View>
+      <View style={styles.center}>
+        <Text style={styles.kicker}>{goalLabel}</Text>
+        <View style={styles.valueBlock}>
+          <Text style={styles.value}>{target.toFixed(1)}</Text>
+          <Text style={styles.value}>Kg</Text>
         </View>
-        <RulerPicker
-          min={MIN}
-          max={MAX}
-          step={1}
-          unit="kg"
-          value={target}
-          onChange={setTarget}
-        />
-        <View style={styles.scaleRow}>
-          <Text style={styles.scaleEdge}>{MIN} kg</Text>
-          <Text style={styles.scaleEdge}>{MAX} kg</Text>
-        </View>
+        <OnboardingRuler min={MIN_KG} max={MAX_KG} value={target} onChange={setTarget} />
       </View>
-
-      <View style={styles.note}>
-        <Feather name="info" size={14} color={colors.primary} />
-        <Text style={styles.noteText}>{continueHint}</Text>
-      </View>
-    </StepHeader>
+    </OnboardingShell>
   );
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    marginTop: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  cardSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  summaryCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryColTarget: {
-    backgroundColor: colors.primarySoft,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    marginLeft: spacing.sm,
-  },
-  summaryLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
+  center: { alignItems: 'center', gap: 16, width: '100%' },
+  kicker: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
     color: colors.textMuted,
-    letterSpacing: 1,
-    marginBottom: 2,
+    textAlign: 'center',
   },
-  summaryValue: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-    color: colors.textPrimary,
-    letterSpacing: -0.2,
-  },
-  summaryArrow: {
-    paddingHorizontal: spacing.xs,
-  },
-  scaleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
-  },
-  scaleEdge: {
+  valueBlock: { alignItems: 'center' },
+  value: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  note: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primarySoft,
-  },
-  noteText: {
-    flex: 1,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 40,
+    lineHeight: 48,
     color: colors.textPrimary,
+    textAlign: 'center',
   },
 });

@@ -25,8 +25,9 @@ export function AuthGate({children}:{children:React.ReactNode}){
  useEffect(()=>{
   if(demoMode||!backendConfigured||loading||error||!navigation?.key)return;
   const auth=segments[0]==='(auth)';
+  const authScreen=(segments as string[])[1];
   if(!userId&&!auth)router.replace('/(auth)/sign-in');
-  else if(userId&&hydrated&&(!auth||segments[1]==='sign-in'||segments[1]==='register')){
+  else if(userId&&hydrated&&(!auth||authScreen==='sign-in'||authScreen==='register')){
    if(!state.onboarding.complete&&segments[0]!=='(onboarding)')router.replace('/(onboarding)/welcome');
    else if(state.onboarding.complete&&(auth||segments[0]==='(onboarding)'))router.replace('/(tabs)');
   }

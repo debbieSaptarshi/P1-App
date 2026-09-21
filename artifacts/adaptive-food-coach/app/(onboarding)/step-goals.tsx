@@ -1,22 +1,16 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { View } from 'react-native';
 import type { Goal } from '@/types';
-import { Chip } from './_components/Chip';
-import { StepHeader } from './_components/StepHeader';
-import { colors, radii, spacing } from '@/constants/tokens';
 import { useAppStore } from '@/hooks/useAppStore';
+import { OnboardingShell } from './_components/OnboardingShell';
+import { SelectRow } from './_components/SelectRow';
+import { progressFor, ROUTE_TO_INDEX } from './_components/progress';
 
-const TOTAL_STEPS = 10;
-const STEP_NUM = 7;
-
-const GOALS: { value: Goal; label: string; icon: keyof typeof Feather.glyphMap }[] = [
-  { value: 'lose_weight', label: 'Lose weight', icon: 'trending-down' },
-  { value: 'maintain_weight', label: 'Maintain weight', icon: 'minus' },
-  { value: 'gain_muscle', label: 'Gain muscle', icon: 'plus-circle' },
-  { value: 'improve_health', label: 'Improve health', icon: 'heart' },
-  { value: 'manage_condition', label: 'Manage a condition', icon: 'activity' },
+const OPTIONS: { value: Goal; label: string }[] = [
+  { value: 'lose_weight', label: 'Lose Weight' },
+  { value: 'maintain_weight', label: 'Maintain Weight' },
+  { value: 'gain_muscle', label: 'Gain Weight' },
 ];
 
 export default function StepGoalsScreen() {
@@ -25,91 +19,34 @@ export default function StepGoalsScreen() {
   const persisted = Array.isArray(state.onboarding.answers.goals)
     ? (state.onboarding.answers.goals as Goal[])
     : [];
-  const [selected, setSelected] = useState<Goal[]>(persisted);
-
-  const toggle = (value: Goal) => {
-    setSelected((prev) =>
-      prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value],
-    );
-  };
-
-  const continueEnabled = selected.length > 0;
+  const initial = OPTIONS.some((opt) => opt.value === persisted[0]) ? persisted[0]! : null;
+  const [selected, setSelected] = useState<Goal | null>(initial);
 
   const handleContinue = async () => {
-    if (!continueEnabled) return;
-    await actions.advanceOnboarding(7, { goals: selected });
-    router.push('/(onboarding)/step-diet');
+    if (!selected) return;
+    await actions.advanceOnboarding(ROUTE_TO_INDEX['step-target-weight'], { goals: [selected] });
+    router.push('/(onboarding)/step-target-weight');
   };
 
   return (
-    <StepHeader
-      stepNum={STEP_NUM}
-      totalSteps={TOTAL_STEPS}
-      kicker="GOALS"
-      title="What are your goals?"
-      subtitle="Pick one or more — we'll blend them into a single adaptive plan."
+    <OnboardingShell
+      progress={progressFor('step-goals')}
+      title="What is your goal?"
+      subtitle="This will be used to calibrate your custom plan"
+      continueDisabled={selected == null}
       onContinue={handleContinue}
-      continueDisabled={!continueEnabled}
     >
-      <ScrollView
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {GOALS.map((goal) => (
-          <Chip
-            key={goal.value}
-            label={goal.label}
-            selected={selected.includes(goal.value)}
-            onPress={() => toggle(goal.value)}
-            leadingIcon={goal.icon}
-            testID={`goal-${goal.value}`}
+      <View style={{ gap: 8 }}>
+        {OPTIONS.map((opt) => (
+          <SelectRow
+            key={opt.value}
+            label={opt.label}
+            selected={selected === opt.value}
+            onPress={() => setSelected(opt.value)}
+            testID={`goal-${opt.value}`}
           />
         ))}
-
-        <View style={styles.summary}>
-          <View style={styles.summaryBadge}>
-            <Feather name="check" size={14} color={colors.textInverse} />
-          </View>
-          <Text style={styles.summaryText}>
-            {selected.length === 0
-              ? 'Tap any goal above to start building your blend.'
-              : `${selected.length} goal${selected.length === 1 ? '' : 's'} selected — continue to fine-tune.`}
-          </Text>
-        </View>
-      </ScrollView>
-    </StepHeader>
+      </View>
+    </OnboardingShell>
   );
 }
-
-const styles = StyleSheet.create({
-  list: { flex: 1 },
-  listContent: {
-    gap: spacing.sm,
-    paddingBottom: spacing.xl,
-  },
-  summary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primarySoft,
-    marginTop: spacing.md,
-  },
-  summaryBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryText: {
-    flex: 1,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textPrimary,
-  },
-});
