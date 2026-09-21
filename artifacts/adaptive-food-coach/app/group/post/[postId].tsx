@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing } from '@/constants/tokens';
 import { Button, Card, Header } from '@/components/ui';
 import { appStoreActions, useAppStore } from '@/hooks/useAppStore';
+import { groupProfileHref, profileIdFromName } from '../_profileNav';
 
 interface CommentDraft {
   id: string;
@@ -130,13 +131,27 @@ export default function PostDetailScreen() {
           {/* Hero post */}
           <Card style={styles.postCard}>
             <View style={styles.headerRow}>
-              <View style={styles.avatar}>
-                <Feather name="user" size={16} color={colors.textPrimary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.author}>{livePost.authorName}</Text>
-                <Text style={styles.meta}>{formatDateTime(livePost.createdAt)}</Text>
-              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`See ${livePost.authorName}'s profile`}
+                testID={`post-detail-profile-${livePost.id}`}
+                onPress={() =>
+                  router.push(
+                    groupProfileHref(
+                      livePost.authorId ?? profileIdFromName(livePost.authorName),
+                    ),
+                  )
+                }
+                style={styles.headerIdentity}
+              >
+                <View style={styles.avatar}>
+                  <Feather name="user" size={16} color={colors.textPrimary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.author}>{livePost.authorName}</Text>
+                  <Text style={styles.meta}>{formatDateTime(livePost.createdAt)}</Text>
+                </View>
+              </Pressable>
             </View>
             <Text style={styles.body}>{livePost.body}</Text>
             {!demoMode && livePost.authorId !== state.profile.id ? <View style={{ flexDirection: 'row', gap: 20, marginTop: 16 }}>
@@ -180,7 +195,13 @@ export default function PostDetailScreen() {
               <Text style={styles.emptyTitle}>Be first to reply</Text>
             </Card>
           ) : (
-            allComments.map((c) => <CommentRow key={c.id} comment={c} />)
+            allComments.map((c) => (
+              <CommentRow
+                key={c.id}
+                comment={c}
+                onOpenProfile={() => router.push(groupProfileHref(profileIdFromName(c.author)))}
+              />
+            ))
           )}
           {!hydrated && (
             <Text style={styles.loadingHint}>Loading more comments…</Text>
@@ -220,21 +241,35 @@ export default function PostDetailScreen() {
   );
 }
 
-function CommentRow({ comment }: { comment: CommentDraft }) {
+function CommentRow({
+  comment,
+  onOpenProfile,
+}: {
+  comment: CommentDraft;
+  onOpenProfile: () => void;
+}) {
   const isMine = comment.id.startsWith('local_');
   return (
     <Card style={styles.comment}>
       <View style={styles.commentHeaderRow}>
-        <View style={styles.commentAvatar}>
-          <Feather name="user" size={12} color={colors.textPrimary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.commentAuthor}>
-            {comment.author}
-            {isMine && <Text style={styles.commentYou}> · You</Text>}
-          </Text>
-          <Text style={styles.commentMeta}>{relTime(comment.createdAt)}</Text>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`See ${comment.author}'s profile`}
+          testID={`comment-profile-${comment.id}`}
+          onPress={onOpenProfile}
+          style={styles.commentIdentity}
+        >
+          <View style={styles.commentAvatar}>
+            <Feather name="user" size={12} color={colors.textPrimary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.commentAuthor}>
+              {comment.author}
+              {isMine && <Text style={styles.commentYou}> · You</Text>}
+            </Text>
+            <Text style={styles.commentMeta}>{relTime(comment.createdAt)}</Text>
+          </View>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Reply to ${comment.author}`}
@@ -286,6 +321,12 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   postCard: { marginBottom: spacing.md, gap: spacing.sm },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerIdentity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   avatar: {
     width: 40,
     height: 40,
@@ -344,6 +385,12 @@ const styles = StyleSheet.create({
   },
   comment: { marginBottom: spacing.xs, gap: spacing.xs },
   commentHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  commentIdentity: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,

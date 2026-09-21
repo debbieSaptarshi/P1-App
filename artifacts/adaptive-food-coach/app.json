@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.anonymous.adaptivefoodcoach",
       "infoPlist": {
         "NSCameraUsageDescription": "Allow Adaptive Food Coach to scan meals, barcodes, and nutrition labels.",
-        "NSPhotoLibraryUsageDescription": "Allow Adaptive Food Coach to choose photos of meals and labels."
+        "NSPhotoLibraryUsageDescription": "Allow Adaptive Food Coach to choose photos of meals and labels.",
+        "NSPhotoLibraryAddUsageDescription": "Allow Adaptive Food Coach to save your milestone share card to Photos."
       }
     },
     "android": {
@@ -40,6 +41,16 @@
           "photosPermission": "Allow Adaptive Food Coach to choose photos of meals and labels."
         }
       ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Adaptive Food Coach to save your milestone share card to Photos.",
+          "savePhotosPermission": "Allow Adaptive Food Coach to save your milestone share card to Photos.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "expo-sharing",
+      "expo-clipboard",
       "expo-secure-store",
       [
         "expo-audio",

@@ -64,13 +64,65 @@ export const seedMealRecipes: MealRecipe[] = [
   },
 ];
 
+function badge(
+  id: string,
+  title: string,
+  description: string,
+  category: MilestoneBadge['category'],
+  face: NonNullable<MilestoneBadge['face']>,
+  extra: Partial<MilestoneBadge> = {},
+): MilestoneBadge {
+  return {
+    id,
+    title,
+    description,
+    category,
+    face,
+    iconKey: extra.iconKey ?? 'award',
+    tier: extra.tier ?? 'bronze',
+    progress: extra.progress ?? 0,
+    unlocked: extra.unlocked ?? false,
+    unlockedAt: extra.unlockedAt,
+  };
+}
+
 export const seedMilestones: MilestoneBadge[] = [
-  { id: 'ms_1', title: '7-Day Streak', description: 'Logged 7 days in a row.', tier: 'bronze', category: 'streak', progress: 1, unlocked: true, unlockedAt: '2025-09-10T00:00:00.000Z', iconKey: 'zap' },
-  { id: 'ms_2', title: 'Protein Pro', description: 'Hit protein goal 14 times.', tier: 'silver', category: 'nutrition', progress: 1, unlocked: true, unlockedAt: '2025-09-13T00:00:00.000Z', iconKey: 'award' },
-  { id: 'ms_3', title: 'Hydration Hero', description: 'Met daily water goal.', tier: 'gold', category: 'nutrition', progress: 0.6, unlocked: false, iconKey: 'droplet' },
-  { id: 'ms_4', title: 'Run Streak', description: '5 runs logged.', tier: 'silver', category: 'exercise', progress: 1, unlocked: true, unlockedAt: '2025-09-14T00:00:00.000Z', iconKey: 'activity' },
-  { id: 'ms_5', title: 'Group Leader', description: 'Top 3 in your group.', tier: 'gold', category: 'community', progress: 0.4, unlocked: false, iconKey: 'users' },
-  { id: 'ms_6', title: 'Goal Crusher', description: 'Reached target weight.', tier: 'platinum', category: 'nutrition', progress: 0.45, unlocked: false, iconKey: 'target' },
+  badge('ms_1', 'Rookie', '3 day streak', 'streak', { kind: 'streak', value: '3', unit: 'STREAK' }, { unlocked: true, progress: 1, unlockedAt: '2026-01-23T00:00:00.000Z', tier: 'bronze', iconKey: 'zap' }),
+  badge('ms_2', 'Getting Serious', '10 day streak', 'streak', { kind: 'streak', value: '10', unit: 'STREAK' }, { tier: 'silver', iconKey: 'zap' }),
+  badge('ms_3', 'Locked In', '50 day streak', 'streak', { kind: 'streak', value: '50', unit: 'STREAK' }, { tier: 'gold', iconKey: 'zap' }),
+  badge('ms_4', 'Triple Threat', '100 day streak', 'streak', { kind: 'streak', value: '100', unit: 'STREAK' }, { tier: 'gold', iconKey: 'zap' }),
+  badge('ms_5', 'No Days Off', '365 day streak', 'streak', { kind: 'streak', value: '365', unit: 'STREAK' }, { tier: 'platinum', iconKey: 'zap' }),
+  badge('ms_6', 'Immortal', '1000 day streak', 'streak', { kind: 'streak', value: '1000', unit: 'STREAK' }, { tier: 'platinum', iconKey: 'zap' }),
+  badge('ms_7', 'Meals', 'Logged 5 meals', 'nutrition', { kind: 'number', value: '5' }, { unlocked: true, progress: 1, unlockedAt: '2026-01-24T00:00:00.000Z', tier: 'gold', iconKey: 'award' }),
+  badge('ms_8', 'Nutrition', 'Logged 50 meals', 'nutrition', { kind: 'number', value: '50' }, { unlocked: true, progress: 1, unlockedAt: '2026-01-25T00:00:00.000Z', tier: 'gold', iconKey: 'award' }),
+  badge('ms_9', 'Logfather', 'Logged 500 meals', 'nutrition', { kind: 'number', value: '500' }, { tier: 'platinum', iconKey: 'award' }),
+  badge('ms_10', 'One Hit', 'Hit daily calories', 'nutrition', { kind: 'number', value: '1' }, { iconKey: 'target' }),
+  badge('ms_11', 'Loyalty III', 'Hit 7 days', 'nutrition', { kind: 'number', value: '7X' }, { iconKey: 'target' }),
+  badge('ms_12', 'Bulleye', 'Hit 30 days', 'nutrition', { kind: 'day', value: '30', unit: 'DAY' }, { iconKey: 'target' }),
+  badge('ms_13', 'Helping', 'Invited 1 Friend', 'community', { kind: 'icon', value: 'user-plus' }, { iconKey: 'user-plus' }),
+  badge('ms_14', 'Group', 'Invited 3 Friend', 'community', { kind: 'icon', value: 'users' }, { iconKey: 'users' }),
+  badge('ms_15', 'Leader', 'Invited 10 Friend', 'community', { kind: 'icon', value: 'award' }, { iconKey: 'award' }),
+  badge('ms_16', 'Hydrate', 'Water Intake', 'nutrition', { kind: 'icon', value: 'droplet' }, { iconKey: 'droplet' }),
+  badge('ms_17', 'Sippin', 'Water 3 days', 'nutrition', { kind: 'icon', value: 'droplet' }, { iconKey: 'droplet' }),
+  badge('ms_18', 'Aquaholic', 'Water 10 days', 'nutrition', { kind: 'icon', value: 'droplet' }, { iconKey: 'droplet' }),
+  badge('ms_19', 'Clean Sweep', '3 Meals in a day', 'nutrition', { kind: 'icon', value: 'check-circle' }, { iconKey: 'check-circle' }),
+  badge('ms_20', 'Sweat Equity', '5 Workout', 'exercise', { kind: 'icon', value: 'activity' }, { iconKey: 'activity' }),
+  badge('ms_21', 'Speed Logger', 'Save 10 meals', 'nutrition', { kind: 'icon', value: 'zap' }, { iconKey: 'zap' }),
+  badge('ms_22', 'Vegetable', 'Eat vegetable', 'nutrition', { kind: 'icon', value: 'feather' }, { iconKey: 'feather' }),
+  badge('ms_23', 'Nut Case', 'Eat nuts', 'nutrition', { kind: 'icon', value: 'circle' }, { iconKey: 'circle' }),
+  badge('ms_24', 'Berry', 'Eat Berries', 'nutrition', { kind: 'icon', value: 'heart' }, { iconKey: 'heart' }),
+  badge('ms_25', 'First Drop', 'Lose 1 Kg', 'nutrition', { kind: 'kg', value: '1', unit: 'KG' }, { iconKey: 'trending-down' }),
+  badge('ms_26', 'Bye Burrito', 'Lose 5 Kg', 'nutrition', { kind: 'kg', value: '5', unit: 'KG' }, { iconKey: 'trending-down' }),
+  badge('ms_27', 'Scale Tipper', 'Lose 10 Kg', 'nutrition', { kind: 'kg', value: '10', unit: 'KG' }, { iconKey: 'trending-down' }),
+  badge('ms_28', 'Heavy Exit', 'Lose 25 Kg', 'nutrition', { kind: 'kg', value: '25', unit: 'KG' }, { iconKey: 'trending-down' }),
+  badge('ms_29', 'Who Dis?', 'Lose 50 Kg', 'nutrition', { kind: 'kg', value: '50', unit: 'KG' }, { iconKey: 'trending-down' }),
+  badge('ms_30', 'Final Form', 'Lose 100 Kg', 'nutrition', { kind: 'kg', value: '100', unit: 'KG' }, { iconKey: 'trending-down' }),
+  badge('ms_31', 'Time Traveller', 'Longest Streak', 'streak', { kind: 'icon', value: 'clock' }, { iconKey: 'clock' }),
+  badge('ms_32', 'Gremlin', 'Longest Streak', 'streak', { kind: 'icon', value: 'smile' }, { iconKey: 'smile' }),
+  badge('ms_33', 'Health Nut', 'Longest Streak', 'streak', { kind: 'day', value: '1' }, { iconKey: 'heart' }),
+  badge('ms_34', 'Dumpster', 'Longest Streak', 'streak', { kind: 'day', value: '10' }, { iconKey: 'trash-2' }),
+  badge('ms_35', 'Doppleganger', 'Longest Streak', 'community', { kind: 'icon', value: 'copy' }, { iconKey: 'copy' }),
+  badge('ms_36', 'Omega Log', 'Longest Streak', 'nutrition', { kind: 'icon', value: 'book' }, { iconKey: 'book' }),
 ];
 
 export const seedGroups: AccountabilityGroup[] = [
@@ -129,6 +181,7 @@ export const seedGroupPosts: GroupPost[] = [
   {
     id: 'pst_1',
     groupId: 'grp_1',
+    authorId: 'u1',
     authorName: 'Aisha Khan',
     body: 'Hit my protein goal for the 7th day in a row 💪',
     createdAt: '2025-09-15T08:00:00.000Z',
@@ -138,6 +191,7 @@ export const seedGroupPosts: GroupPost[] = [
   {
     id: 'pst_2',
     groupId: 'grp_2',
+    authorId: 'u3',
     authorName: 'Carlos Rivera',
     body: '5K in 26:08 today — new PR!',
     createdAt: '2025-09-15T07:30:00.000Z',
@@ -147,6 +201,7 @@ export const seedGroupPosts: GroupPost[] = [
   {
     id: 'pst_3',
     groupId: 'grp_1',
+    authorId: 'u2',
     authorName: 'Lin Chen',
     body: 'Loving the new high-fiber recipes — anyone tried the lentil bowl?',
     createdAt: '2025-09-14T19:14:00.000Z',

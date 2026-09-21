@@ -21,6 +21,7 @@ import { colors, radii, spacing } from '@/constants/tokens';
 import { Button, Card, Header } from '@/components/ui';
 import { appStoreActions, useAppStore } from '@/hooks/useAppStore';
 import type { GroupPost } from '@/types';
+import { groupProfileHref, profileIdFromName } from './_profileNav';
 
 /**
  * Group detail view: hero card + scoped feed + a compose box.
@@ -92,6 +93,7 @@ export default function GroupDetailScreen() {
     const newPost: GroupPost = {
       id: `local_${Date.now()}`,
       groupId: group.id,
+      authorId: state.profile.id,
       authorName: state.profile.name,
       body: trimmed,
       createdAt: new Date().toISOString(),
@@ -172,6 +174,11 @@ export default function GroupDetailScreen() {
                 key={post.id}
                 post={post}
                 onOpen={() => router.push(`/group/post/${post.id}`)}
+                onOpenProfile={() =>
+                  router.push(
+                    groupProfileHref(post.authorId ?? profileIdFromName(post.authorName)),
+                  )
+                }
               />
             ))
           )}
@@ -219,23 +226,32 @@ export default function GroupDetailScreen() {
 interface PostRowProps {
   post: GroupPost;
   onOpen: () => void;
+  onOpenProfile: () => void;
 }
 
-function PostRow({ post, onOpen }: PostRowProps) {
+function PostRow({ post, onOpen, onOpenProfile }: PostRowProps) {
   const isLocal = post.id.startsWith('local_');
   return (
     <Card style={styles.postCard}>
       <View style={styles.postHeader}>
-        <View style={styles.postAvatar}>
-          <Feather name="user" size={14} color={colors.textPrimary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.postAuthor}>
-            {post.authorName}
-            {isLocal && <Text style={styles.youTag}> · You</Text>}
-          </Text>
-          <Text style={styles.postMeta}>{relTime(post.createdAt)}</Text>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`See ${post.authorName}'s profile`}
+          testID={`group-post-profile-${post.id}`}
+          onPress={onOpenProfile}
+          style={styles.postIdentity}
+        >
+          <View style={styles.postAvatar}>
+            <Feather name="user" size={14} color={colors.textPrimary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.postAuthor}>
+              {post.authorName}
+              {isLocal && <Text style={styles.youTag}> · You</Text>}
+            </Text>
+            <Text style={styles.postMeta}>{relTime(post.createdAt)}</Text>
+          </View>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open post"
@@ -349,6 +365,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     marginBottom: spacing.xs,
+  },
+  postIdentity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   postAvatar: {
     width: 32,

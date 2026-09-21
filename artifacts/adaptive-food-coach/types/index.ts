@@ -180,6 +180,11 @@ export interface MilestoneBadge {
   unlocked: boolean;
   unlockedAt?: string;
   iconKey: string;
+  face?: {
+    kind: 'streak' | 'number' | 'icon' | 'kg' | 'day';
+    value: string;
+    unit?: string;
+  };
 }
 
 export interface GroupPost {

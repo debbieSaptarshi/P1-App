@@ -1,0 +1,10 @@
+<svg width="386" height="510" viewBox="0 0 386 510" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="386" height="510" fill="url(#shareGlow)"/>
+  <defs>
+    <radialGradient id="shareGlow" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="10" gradientTransform="matrix(-16.85 51 -81.38 -26.887 378.5 0)">
+      <stop stop-color="rgb(239,68,68)" offset="0"/>
+      <stop stop-color="rgba(179,55,46,0.5)" offset="0.44906"/>
+      <stop stop-color="rgba(119,41,23,0)" offset="0.89811"/>
+    </radialGradient>
+  </defs>
+</svg>

@@ -13,6 +13,7 @@ import { colors, radii, spacing } from '@/constants/tokens';
 import { Card, Header, SectionTitle } from '@/components/ui';
 import { useAppStore } from '@/hooks/useAppStore';
 import type { LeaderboardEntry } from '@/types';
+import { groupProfileHref } from './_profileNav';
 
 const PERIOD_OPTIONS = ['Weekly', 'Monthly', 'All-time'] as const;
 type Period = (typeof PERIOD_OPTIONS)[number];
@@ -110,16 +111,35 @@ export default function GroupLeaderboardScreen() {
         </View>
 
         {ordered.map((entry) => (
-          <LeaderRow key={entry.userId} entry={entry} isMe={myEntry?.userId === entry.userId} />
+          <LeaderRow
+            key={entry.userId}
+            entry={entry}
+            isMe={myEntry?.userId === entry.userId}
+            onOpenProfile={() => router.push(groupProfileHref(entry.userId))}
+          />
         ))}
       </ScrollView>
     </View>
   );
 }
 
-function LeaderRow({ entry, isMe }: { entry: LeaderboardEntry; isMe: boolean }) {
+function LeaderRow({
+  entry,
+  isMe,
+  onOpenProfile,
+}: {
+  entry: LeaderboardEntry;
+  isMe: boolean;
+  onOpenProfile: () => void;
+}) {
   return (
-    <Card style={isMe ? { ...styles.row, ...styles.rowMe } : styles.row}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`See ${entry.displayName}'s profile`}
+      testID={`leaderboard-profile-${entry.userId}`}
+      onPress={onOpenProfile}
+    >
+      <Card style={isMe ? { ...styles.row, ...styles.rowMe } : styles.row}>
       <View style={[styles.rankBadge, isMe && styles.rankBadgeMe]}>
         <Text style={[styles.rankNumber, isMe && styles.rankNumberMe]}>
           {entry.rank}
@@ -141,7 +161,8 @@ function LeaderRow({ entry, isMe }: { entry: LeaderboardEntry; isMe: boolean }) 
           color={entry.rank === 1 ? colors.accentOrange : colors.textMuted}
         />
       )}
-    </Card>
+      </Card>
+    </Pressable>
   );
 }
 

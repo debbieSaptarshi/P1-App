@@ -1,0 +1,28 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="80" height="80" fill="#1E1E1E"/>
+<g id="Badge">
+<rect x="-1019.5" y="-119.5" width="1219" height="619" rx="4.5" stroke="#8A38F5" stroke-dasharray="10 5"/>
+<g id="Variant=Badge 11, State=Disable" clip-path="url(#clip0_0_1)">
+<path id="Polygon 1" d="M37.1786 2.04984C38.861 0.827552 41.139 0.827554 42.8214 2.04984L75.2209 25.5895C76.9032 26.8118 77.6072 28.9783 76.9646 30.956L64.5891 69.044C63.9465 71.0217 62.1035 72.3607 60.024 72.3607H19.976C17.8965 72.3607 16.0535 71.0217 15.4109 69.044L3.03541 30.956C2.39281 28.9783 3.09677 26.8118 4.77911 25.5895L37.1786 2.04984Z" fill="#CBD5E1"/>
+<path id="Polygon 2" d="M38.1191 9.36681C39.2406 8.55195 40.7594 8.55195 41.8809 9.36681L68.5529 28.7451C69.6745 29.56 70.1438 31.0044 69.7154 32.3228L59.5276 63.6776C59.0992 64.9961 57.8705 65.8888 56.4842 65.8888H23.5158C22.1295 65.8888 20.9008 64.9961 20.4724 63.6776L10.2846 32.3228C9.85624 31.0044 10.3255 29.56 11.4471 28.7451L38.1191 9.36681Z" fill="#94A3B8"/>
+<g id="7X" filter="url(#filter0_d_0_1)">
+<path d="M24.282 49.8002L34.5275 34.5274L34.5638 34.4002H25.582L26.1002 31.182H39.1638L38.6275 34.4456L28.3457 49.8002H24.282ZM44.5103 31.182L47.2012 37.5274H47.3467L52.183 31.182H56.7557L49.5467 40.4911L53.7921 49.8002H49.3467L46.583 43.4456H46.4376L41.5648 49.8002H36.9739L44.3648 40.4911L40.1739 31.182H44.5103Z" fill="#CBD5E1"/>
+</g>
+</g>
+</g>
+<defs>
+<filter id="filter0_d_0_1" x="21.0822" y="31.182" width="38.8736" height="25.0182" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="3.2"/>
+<feGaussianBlur stdDeviation="1.6"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+</filter>
+<clipPath id="clip0_0_1">
+<rect width="80" height="80" fill="white"/>
+</clipPath>
+</defs>
+</svg>

@@ -1,417 +1,293 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
-  FlatList,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Feather } from '@expo/vector-icons';
 
-import { BadgeIcon, Header, ProgressBar } from '@/components/ui';
+import { CircleIconButton } from '@/components/meals/CircleIconButton';
+import { FlameMark } from '@/components/milestones/FlameMark';
+import { HexBadge } from '@/components/milestones/HexBadge';
+import { colors, radii, spacing } from '@/constants/tokens';
+import { mergeMilestoneCatalog, streakFromLogs } from '@/lib/milestones';
 import { useAppStore } from '@/hooks/useAppStore';
-import { useColors } from '@/hooks/useColors';
-import { colors as tokens, radii, spacing } from '@/constants/tokens';
 import type { MilestoneBadge } from '@/types';
 
-type Category = 'all' | 'streak' | 'nutrition' | 'exercise' | 'community';
-
-const CATEGORIES: { key: Category; label: string; icon: keyof typeof Feather.glyphMap }[] = [
-  { key: 'all', label: 'All', icon: 'grid' },
-  { key: 'streak', label: 'Streak', icon: 'zap' },
-  { key: 'nutrition', label: 'Nutrition', icon: 'heart' },
-  { key: 'exercise', label: 'Exercise', icon: 'activity' },
-  { key: 'community', label: 'Community', icon: 'users' },
-];
+const iconBack = require('@/assets/images/milestones/back.svg');
+const iconShare = require('@/assets/images/milestones/share.svg');
+const badgeHex = require('@/assets/images/milestones/hex-earned.png');
+const badgeHexSm = require('@/assets/images/milestones/hex-earned-sm.png');
 
 export default function MilestonesIndex() {
   const insets = useSafeAreaInsets();
-  const palette = useColors();
   const router = useRouter();
   const { state } = useAppStore();
-  const milestones = state.milestones ?? [];
+  const catalog = useMemo(
+    () => mergeMilestoneCatalog(state.milestones ?? []),
+    [state.milestones],
+  );
 
-  const [category, setCategory] = useState<Category>('all');
-
-  const filtered = useMemo(() => {
-    if (category === 'all') return milestones;
-    return milestones.filter((m) => m.category === category);
-  }, [milestones, category]);
-
-  const counts = useMemo(() => {
-    const acc: Record<Category, { total: number; unlocked: number }> = {
-      all: { total: 0, unlocked: 0 },
-      streak: { total: 0, unlocked: 0 },
-      nutrition: { total: 0, unlocked: 0 },
-      exercise: { total: 0, unlocked: 0 },
-      community: { total: 0, unlocked: 0 },
-    };
-    for (const m of milestones) {
-      acc.all.total += 1;
-      if (m.unlocked) acc.all.unlocked += 1;
-      acc[m.category].total += 1;
-      if (m.unlocked) acc[m.category].unlocked += 1;
-    }
-    return acc;
-  }, [milestones]);
-
-  const overallProgress = useMemo(() => {
-    if (counts.all.total === 0) return 0;
-    return counts.all.unlocked / counts.all.total;
-  }, [counts]);
-
-  const handleCategoryChange = (next: Category) => {
-    Haptics.selectionAsync();
-    setCategory(next);
-  };
+  const unlockedCount = catalog.filter((badge) => badge.unlocked).length;
+  const streaks = useMemo(
+    () => streakFromLogs(state.foodLogs ?? []),
+    [state.foodLogs],
+  );
+  const dayStreak = Math.max(streaks.current, unlockedCount > 0 ? 1 : 0);
+  const longest = Math.max(streaks.longest, dayStreak);
+  const progress = catalog.length === 0 ? 0 : unlockedCount / catalog.length;
 
   const handleBadgePress = (badge: MilestoneBadge) => {
     Haptics.selectionAsync();
     router.push(`/milestones/badge/${badge.id}`);
   };
 
+  const handleShare = () => {
+    Haptics.selectionAsync();
+    router.push('/milestones/share/streak');
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: palette.background }]}>
-      <Header
-        title="Milestones"
-        subtitle={`${counts.all.unlocked} of ${counts.all.total} unlocked`}
-      />
-
-      <View style={styles.tabsWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsRow}
-        >
-          {CATEGORIES.map((cat) => {
-            const active = category === cat.key;
-            const data = counts[cat.key];
-            return (
-              <Pressable
-                key={cat.key}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={`${cat.label} category`}
-                testID={`milestone-tab-${cat.key}`}
-                onPress={() => handleCategoryChange(cat.key)}
-                style={({ pressed }) => [
-                  styles.tabChip,
-                  {
-                    backgroundColor: active
-                      ? tokens.darkSurface
-                      : tokens.card,
-                    borderColor: active ? tokens.darkSurface : tokens.border,
-                    opacity: pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                <Feather
-                  name={cat.icon}
-                  size={14}
-                  color={active ? tokens.textInverse : tokens.textPrimary}
-                />
-                <Text
-                  style={[
-                    styles.tabChipLabel,
-                    {
-                      color: active
-                        ? tokens.textInverse
-                        : tokens.textPrimary,
-                    },
-                  ]}
-                >
-                  {cat.label}
-                </Text>
-                {data.total > 0 && (
-                  <View
-                    style={[
-                      styles.tabChipCount,
-                      {
-                        backgroundColor: active
-                          ? 'rgba(255,255,255,0.2)'
-                          : tokens.background,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.tabChipCountText,
-                        {
-                          color: active
-                            ? tokens.textInverse
-                            : tokens.textMuted,
-                        },
-                      ]}
-                    >
-                      {data.unlocked}/{data.total}
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      <View style={styles.progressSummary}>
-        <View style={styles.progressSummaryHeader}>
-          <Text style={[styles.progressSummaryEyebrow, { color: palette.mutedForeground }]}>
-            Catalog progress
-          </Text>
-          <Text style={[styles.progressSummaryValue, { color: palette.foreground }]}>
-            {Math.round(overallProgress * 100)}%
-          </Text>
-        </View>
-        <ProgressBar
-          progress={overallProgress}
-          color={tokens.accentGreen}
-          backgroundColor={tokens.background}
-          height={6}
+    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+      <View style={styles.topBar}>
+        <CircleIconButton
+          source={iconBack}
+          accessibilityLabel="Go back"
+          testID="milestones-back"
+          onPress={() => {
+            Haptics.selectionAsync();
+            if (router.canGoBack()) router.back();
+            else router.replace('/(tabs)/progress');
+          }}
+        />
+        <CircleIconButton
+          source={iconShare}
+          accessibilityLabel="Share milestones"
+          testID="milestones-share"
+          onPress={handleShare}
         />
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.gridRow}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={[
-          styles.gridContent,
-          { paddingBottom: insets.bottom + 120 },
+          styles.content,
+          { paddingBottom: insets.bottom + 40 },
         ]}
-        ItemSeparatorComponent={() => <View style={styles.gridGap} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Feather name="award" size={28} color={tokens.textMuted} />
-            <Text style={[styles.emptyStateText, { color: palette.mutedForeground }]}>
-              No badges in this category yet.
-            </Text>
+      >
+        <Text style={styles.pageTitle}>Milestones</Text>
+
+        <View style={styles.statRow}>
+          <View style={styles.statCard}>
+            <View style={styles.flameStage}>
+              <FlameMark size={100} />
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>{dayStreak}</Text>
+              </View>
+            </View>
+            <Text style={styles.statLabel}>Day Streak</Text>
           </View>
-        }
-        renderItem={({ item }) => (
-          <BadgeCard badge={item} onPress={() => handleBadgePress(item)} />
-        )}
-      />
+
+          <View style={styles.statCard}>
+            <View style={styles.hexStage}>
+              <Image source={badgeHex} style={styles.hexArt} contentFit="contain" />
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>{unlockedCount}</Text>
+              </View>
+            </View>
+            <Text style={styles.statLabel}>Badge Earned</Text>
+          </View>
+        </View>
+
+        <View style={styles.chipRow}>
+          <View style={styles.chip}>
+            <View style={styles.chipIcon}>
+              <FlameMark size={40} />
+            </View>
+            <View style={styles.chipCopy}>
+              <Text style={styles.chipTitle}>
+                {longest} day{longest === 1 ? '' : 's'}
+              </Text>
+              <Text style={styles.chipCaption}>Longest Streak</Text>
+            </View>
+          </View>
+
+          <View style={styles.chip}>
+            <View style={styles.chipIcon}>
+              <Image source={badgeHexSm} style={styles.chipHex} contentFit="contain" />
+            </View>
+            <View style={styles.chipCopy}>
+              <Text style={styles.chipTitle}>
+                {unlockedCount}/{catalog.length} Badges
+              </Text>
+              <View style={styles.track}>
+                <View style={[styles.trackFill, { width: `${Math.max(6, progress * 100)}%` }]} />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.grid}>
+          {catalog.map((badge) => (
+            <View key={badge.id} style={styles.gridCell}>
+              <HexBadge badge={badge} onPress={() => handleBadgePress(badge)} />
+            </View>
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
-function BadgeCard({
-  badge,
-  onPress,
-}: {
-  badge: MilestoneBadge;
-  onPress: () => void;
-}) {
-  const palette = useColors();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${badge.title} badge`}
-      testID={`badge-card-${badge.id}`}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.badgeCard,
-        {
-          backgroundColor: palette.card,
-          opacity: pressed ? 0.94 : 1,
-        },
-      ]}
-    >
-      <View style={styles.badgeCardHeader}>
-        <BadgeIcon
-          tier={badge.tier}
-          iconKey={badge.iconKey as any}
-          progress={Math.max(0.35, badge.progress)}
-          unlocked={badge.unlocked}
-          size="md"
-        />
-        <View
-          style={[
-            styles.tierPill,
-            {
-              backgroundColor: badge.unlocked
-                ? tierAccent(badge.tier)
-                : tokens.background,
-            },
-          ]}
-        >
-          <Feather
-            name={badge.unlocked ? 'check-circle' : 'lock'}
-            size={11}
-            color={badge.unlocked ? tokens.textInverse : tokens.textMuted}
-          />
-          <Text
-            style={[
-              styles.tierPillText,
-              {
-                color: badge.unlocked
-                  ? tokens.textInverse
-                  : tokens.textMuted,
-              },
-            ]}
-          >
-            {badge.unlocked ? badge.tier : 'Locked'}
-          </Text>
-        </View>
-      </View>
-      <Text style={[styles.badgeCardTitle, { color: palette.foreground }]} numberOfLines={2}>
-        {badge.title}
-      </Text>
-      <Text
-        style={[styles.badgeCardDescription, { color: palette.mutedForeground }]}
-        numberOfLines={3}
-      >
-        {badge.description}
-      </Text>
-      <View style={styles.badgeCardProgressRow}>
-        <ProgressBar
-          progress={Math.max(0.02, badge.progress)}
-          color={badge.unlocked ? tokens.accentGreen : tokens.primary}
-          backgroundColor={tokens.background}
-          height={4}
-        />
-        <Text
-          style={[
-            styles.badgeCardProgressText,
-            { color: palette.mutedForeground },
-          ]}
-        >
-          {badge.unlocked ? 'Unlocked' : `${Math.round(badge.progress * 100)}%`}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
-function tierAccent(tier: MilestoneBadge['tier']): string {
-  switch (tier) {
-    case 'bronze':
-      return '#C2410C';
-    case 'silver':
-      return '#475569';
-    case 'gold':
-      return '#B45309';
-    case 'platinum':
-      return '#5B21B6';
-  }
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  tabsWrapper: { paddingTop: spacing.xs },
-  tabsRow: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
-  },
-  tabChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    marginRight: spacing.xs,
-  },
-  tabChipLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-  },
-  tabChipCount: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radii.pill,
-  },
-  tabChipCountText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 10,
-  },
-  progressSummary: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.xs,
-  },
-  progressSummaryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  progressSummaryEyebrow: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  progressSummaryValue: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-    letterSpacing: -0.4,
-  },
-  gridContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
-  },
-  gridRow: {
-    gap: spacing.sm,
-  },
-  gridGap: { height: spacing.sm },
-  badgeCard: {
+  screen: {
     flex: 1,
-    borderRadius: radii.lg,
-    padding: spacing.md,
+    backgroundColor: colors.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
+  },
+  pageTitle: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.2,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  statRow: {
+    flexDirection: 'row',
     gap: spacing.xs,
   },
-  badgeCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  tierPill: {
-    flexDirection: 'row',
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: radii.xl,
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: 10,
+  },
+  flameStage: {
+    width: 100,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  hexStage: {
+    width: 100,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hexArt: {
+    width: 70,
+    height: 70,
+  },
+  countPill: {
+    position: 'absolute',
+    bottom: 8,
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: 2,
     borderRadius: radii.pill,
-  },
-  tierPillText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  badgeCardTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-    letterSpacing: -0.2,
-  },
-  badgeCardDescription: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  badgeCardProgressRow: {
-    gap: 6,
-    marginTop: spacing.xs,
-  },
-  badgeCardProgressText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    letterSpacing: 0.3,
-  },
-  emptyState: {
+    backgroundColor: colors.darkSurface,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     alignItems: 'center',
-    paddingVertical: spacing.xxl,
-    gap: spacing.sm,
+    justifyContent: 'center',
   },
-  emptyStateText: {
+  countPillText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 13,
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: colors.textInverse,
+    textAlign: 'center',
+  },
+  statLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
+  },
+  chip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: 2,
+  },
+  chipIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipHex: {
+    width: 28,
+    height: 28,
+  },
+  chipCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  chipTitle: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: colors.textPrimary,
+  },
+  chipCaption: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
+    color: colors.textMuted,
+  },
+  track: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+    marginTop: 2,
+  },
+  trackFill: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: spacing.xl,
+  },
+  gridCell: {
+    width: '31%',
+    alignItems: 'center',
   },
 });

@@ -24,9 +24,10 @@ export function AuthGate({children}:{children:React.ReactNode}){
  },[]);
  useEffect(()=>{
   if(demoMode||!backendConfigured||loading||error||!navigation?.key)return;
-  const auth=segments[0]==='(auth)';
+  const parts=segments as string[];
+  const auth=parts[0]==='(auth)';
   if(!userId&&!auth)router.replace('/(auth)/sign-in');
-  else if(userId&&hydrated&&(!auth||segments[1]==='sign-in'||segments[1]==='register')){
+  else if(userId&&hydrated&&(!auth||parts[1]==='sign-in'||parts[1]==='register')){
    if(!state.onboarding.complete&&segments[0]!=='(onboarding)')router.replace('/(onboarding)/welcome');
    else if(state.onboarding.complete&&(auth||segments[0]==='(onboarding)'))router.replace('/(tabs)');
   }

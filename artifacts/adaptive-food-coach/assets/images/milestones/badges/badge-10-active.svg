@@ -1,0 +1,40 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="80" height="80" fill="#1E1E1E"/>
+<g id="Badge">
+<rect x="-319.5" y="-119.5" width="1219" height="619" rx="4.5" stroke="#8A38F5" stroke-dasharray="10 5"/>
+<g id="Variant=Badge 10, State=Active" clip-path="url(#clip0_0_1)">
+<path id="Polygon 1" d="M37.1786 2.04984C38.861 0.827552 41.139 0.827554 42.8214 2.04984L75.2209 25.5895C76.9032 26.8118 77.6072 28.9783 76.9646 30.956L64.5891 69.044C63.9465 71.0217 62.1035 72.3607 60.024 72.3607H19.976C17.8965 72.3607 16.0535 71.0217 15.4109 69.044L3.03541 30.956C2.39281 28.9783 3.09677 26.8118 4.77911 25.5895L37.1786 2.04984Z" fill="url(#paint0_linear_0_1)"/>
+<path id="Polygon 2" d="M38.3545 9.69067C39.3358 8.97773 40.6642 8.97773 41.6455 9.69067L68.3174 29.0686C69.2988 29.7816 69.7098 31.0458 69.335 32.1995L59.1475 63.554C58.7726 64.7076 57.6973 65.4884 56.4844 65.4885H23.5156C22.3027 65.4884 21.2274 64.7076 20.8525 63.554L10.665 32.1995C10.2902 31.0458 10.7013 29.7816 11.6826 29.0686L38.3545 9.69067Z" fill="url(#paint1_linear_0_1)" stroke="url(#paint2_linear_0_1)" stroke-width="0.8"/>
+<g id="1" filter="url(#filter0_d_0_1)">
+<path d="M42.7366 31.182L39.6457 49.8002H35.7093L38.182 34.9184H38.0729L33.3638 37.5911L33.9456 34.1002L39.0366 31.182H42.7366Z" fill="white"/>
+</g>
+</g>
+</g>
+<defs>
+<filter id="filter0_d_0_1" x="30.1643" y="31.182" width="15.7721" height="25.0182" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="3.2"/>
+<feGaussianBlur stdDeviation="1.6"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+</filter>
+<linearGradient id="paint0_linear_0_1" x1="40" y1="0" x2="40" y2="80" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FBBF24"/>
+<stop offset="1" stop-color="#D97706"/>
+</linearGradient>
+<linearGradient id="paint1_linear_0_1" x1="40" y1="8.00024" x2="40" y2="72.0002" gradientUnits="userSpaceOnUse">
+<stop stop-color="#F59E0B"/>
+<stop offset="1" stop-color="#B45309"/>
+</linearGradient>
+<linearGradient id="paint2_linear_0_1" x1="8" y1="8.00024" x2="72" y2="72.0002" gradientUnits="userSpaceOnUse">
+<stop stop-color="#F59E0B"/>
+<stop offset="1" stop-color="#D97706"/>
+</linearGradient>
+<clipPath id="clip0_0_1">
+<rect width="80" height="80" fill="white"/>
+</clipPath>
+</defs>
+</svg>

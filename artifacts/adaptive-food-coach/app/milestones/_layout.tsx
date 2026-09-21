@@ -1,41 +1,26 @@
 import React from 'react';
 import { Stack } from 'expo-router';
 
-/**
- * Stack layout for the milestone catalog and detail/share flows.
- * The progress tab on the (tabs) router pushes /milestones/* into this stack.
- */
 export default function MilestonesLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: true,
-        headerBackTitle: 'Back',
-        headerTitleStyle: {
-          fontFamily: 'Inter_700Bold',
-        },
+        headerShown: false,
       }}
     >
-      <Stack.Screen
-        name="index"
-        options={{
-          title: 'Milestones',
-          headerShown: false,
-        }}
-      />
+      <Stack.Screen name="index" />
       <Stack.Screen
         name="badge/[badgeId]"
         options={{
-          title: 'Badge',
           presentation: 'card',
         }}
       />
       <Stack.Screen
         name="share/[badgeId]"
         options={{
-          title: 'Share',
-          presentation: 'modal',
+          presentation: 'transparentModal',
           animation: 'slide_from_bottom',
+          contentStyle: { backgroundColor: 'transparent' },
         }}
       />
     </Stack>
