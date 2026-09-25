@@ -1,5 +1,5 @@
 import { localDate } from '@/services/dates';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -10,17 +10,21 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { CircleIconButton } from '@/components/meals/CircleIconButton';
+import { CircularSaucer } from '@/components/meals/CircularSaucer';
 import {
   ALL_SAMPLE_FOODS,
-  AT_HOME_FOODS,
-  OFFICE_CANTEEN_FOODS,
-  ZOMATO_FOODS,
+  MESS_FOODS,
+  NEARBY_CANTEEN_FOODS,
+  NEARBY_RESTAURANT_FOODS,
+  SAVED_SAMPLE_FOODS,
 } from '@/constants/logFoodCatalog';
 import { colors, radii, spacing } from '@/constants/tokens';
+import { recipeToFoodItem, savedFoodToFoodItem } from './_helpers';
 import { useAppStore } from '@/hooks/useAppStore';
+import { MemberPicker } from '@/components/meals/MemberPicker';
 import type { FoodItem } from '@/types';
 
 const iconBack = require('@/assets/images/log-food/icon-back.svg');
@@ -29,27 +33,46 @@ const iconSearch = require('@/assets/images/log-food/icon-search.svg');
 const iconDot = require('@/assets/images/log-food/icon-dot.svg');
 const iconPlusWhite = require('@/assets/images/log-food/icon-plus-white.svg');
 
-type LogFoodTab = 'all' | 'home' | 'canteen' | 'zomato';
+type LogFoodTab = 'all' | 'mess' | 'nearby' | 'restaurants' | 'saved';
 
 const TABS: { id: LogFoodTab; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'home', label: 'At Home' },
-  { id: 'canteen', label: 'Office Canteen' },
-  { id: 'zomato', label: 'Zomato' },
+  { id: 'mess', label: 'Hostel mess' },
+  { id: 'nearby', label: 'Campus canteens' },
+  { id: 'restaurants', label: 'Nearby' },
+  { id: 'saved', label: 'Saved Foods' },
 ];
 
+function parseTab(value: string | string[] | undefined): LogFoodTab {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === 'mess' || raw === 'fridge' || raw === 'home') return 'mess';
+  if (raw === 'nearby' || raw === 'canteen') return 'nearby';
+  if (raw === 'restaurants' || raw === 'zomato') return 'restaurants';
+  if (raw === 'saved') return raw;
+  return 'all';
+}
+
 /**
- * Log Food — Figma “Log food / All” and “Log food / My Food” chrome.
+ * Log Food — Figma “Log food / All” through “Log food / Saved Food”.
  *
- * Source tabs swap the list. Search filters the active tab. Row plus
- * quick-logs lunch for today; tapping the name opens quantity confirm.
+ * Category tabs stay on this screen (including Saved Foods). Search
+ * filters the active tab. Row plus quick-logs lunch for today.
  */
 export default function LogFoodIndexScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const { state, actions } = useAppStore();
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<LogFoodTab>('all');
+  const [tab, setTab] = useState<LogFoodTab>(() => parseTab(params.tab));
+
+  useEffect(() => {
+    void actions.refreshCareHousehold();
+  }, [actions]);
+
+  useEffect(() => {
+    setTab(parseTab(params.tab));
+  }, [params.tab]);
 
   const recents = useMemo(() => {
     const seen = new Set<string>();
@@ -66,23 +89,32 @@ export default function LogFoodIndexScreen() {
     return result;
   }, [state.foodLogs]);
 
+  const savedFoods = useMemo(() => {
+    const fromBookmarks = state.savedFoods.map(savedFoodToFoodItem);
+    const fromRecipes = state.mealRecipes.map(recipeToFoodItem);
+    const merged = [...fromBookmarks, ...fromRecipes];
+    return merged.length > 0 ? merged : SAVED_SAMPLE_FOODS;
+  }, [state.mealRecipes, state.savedFoods]);
+
   const tabFoods = useMemo(() => {
     switch (tab) {
-      case 'home':
-        return AT_HOME_FOODS;
-      case 'canteen':
-        return OFFICE_CANTEEN_FOODS;
-      case 'zomato':
-        return ZOMATO_FOODS;
+      case 'mess':
+        return MESS_FOODS;
+      case 'nearby':
+        return NEARBY_CANTEEN_FOODS;
+      case 'restaurants':
+        return NEARBY_RESTAURANT_FOODS;
+      case 'saved':
+        return savedFoods;
       default:
         return recents.length > 0 ? recents : ALL_SAMPLE_FOODS;
     }
-  }, [tab, recents]);
+  }, [tab, recents, savedFoods]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return tabFoods;
-    return tabFoods.filter((f) => f.name.toLowerCase().includes(q));
+    return tabFoods.filter((f) => f.name.toLowerCase().includes(q) || f.brand?.toLowerCase().includes(q));
   }, [query, tabFoods]);
 
   const goAddCustom = useCallback(() => {
@@ -134,6 +166,14 @@ export default function LogFoodIndexScreen() {
         />
       </View>
 
+      <View style={{ paddingHorizontal: spacing.lg }}>
+        <MemberPicker
+          members={state.careHousehold.members}
+          selectedId={state.careHousehold.selectedMemberId}
+          onSelect={(id) => void actions.selectCareMember(id)}
+        />
+      </View>
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -152,6 +192,7 @@ export default function LogFoodIndexScreen() {
               onPress={() => {
                 Haptics.selectionAsync();
                 setTab(item.id);
+                router.setParams({ tab: item.id });
               }}
               style={[styles.tab, active && styles.tabActive]}
             >
@@ -239,11 +280,15 @@ function FoodRow({
         onPress={onOpenDetail}
         style={({ pressed }) => [styles.cardInfo, pressed && styles.pressed]}
       >
-        <Text style={styles.foodName}>{food.name}</Text>
-        <View style={styles.metaRow}>
-          <Text style={styles.meta}>🔥 {Math.round(food.calories)} cal</Text>
-          <Image source={iconDot} style={styles.dot} contentFit="contain" />
-          <Text style={styles.meta}>{food.servingSize}</Text>
+        {food.image ? <CircularSaucer source={{ uri: food.image }} size={84} /> : null}
+        <View style={styles.cardCopy}>
+          <Text style={styles.foodName}>{food.name}</Text>
+          {food.brand ? <Text style={styles.meta}>{food.brand}</Text> : null}
+          <View style={styles.metaRow}>
+            <Text style={styles.meta}>🔥 {Math.round(food.calories)} cal</Text>
+            <Image source={iconDot} style={styles.dot} contentFit="contain" />
+            <Text style={styles.meta}>{food.servingSize}</Text>
+          </View>
         </View>
       </Pressable>
       <Pressable
@@ -284,12 +329,16 @@ const styles = StyleSheet.create({
   },
   tabsScroll: {
     flexGrow: 0,
+    flexShrink: 0,
+    height: 38,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   tabsRow: {
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 38,
   },
   tab: {
     paddingHorizontal: spacing.sm,
@@ -375,7 +424,15 @@ const styles = StyleSheet.create({
   },
   cardInfo: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minWidth: 0,
+  },
+  cardCopy: {
+    flex: 1,
     gap: spacing.xs,
+    minWidth: 0,
   },
   foodName: {
     fontFamily: 'Inter_500Medium',

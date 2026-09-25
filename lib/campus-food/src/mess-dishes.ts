@@ -1,0 +1,51 @@
+import { dish, forEveryMess } from './dish';
+import type { CampusDish } from './types';
+
+const shared = [
+  dish(['poha', 'Kanda poha', 'mess-shared', ['breakfast'], '1 plate / 180 g', 180, 248, 6, 42, 7, 3, 420, 'veg', 1.5, 'mess_menu', ['poha', 'kanda poha', 'aloo poha'], { sourceUrl: 'https://gymkhana.iitb.ac.in/~hostel7/' }]),
+  dish(['idli-sambar', 'Idli sambar', 'mess-shared', ['breakfast'], '3 idli + sambar', 250, 220, 8, 42, 3, 5, 580, 'veg', 0.5, 'mess_menu', ['idli', 'idly', 'masala idli']]),
+  dish(['masala-dosa', 'Masala dosa', 'mess-shared', ['breakfast', 'snack'], '1 dosa / 180 g', 180, 340, 8, 52, 12, 4, 620, 'veg', 2, 'mess_menu', ['dosa', 'mysore masala dosa']]),
+  dish(['uttapam', 'Onion uttapam', 'mess-shared', ['breakfast'], '1 uttapam / 160 g', 160, 280, 7, 44, 8, 3, 510, 'veg', 1.5, 'mess_menu', ['uthappam', 'mix veg uttapam']]),
+  dish(['puri-bhaji', 'Puri bhaji', 'mess-shared', ['breakfast'], '4 puri + bhaji', 280, 420, 8, 58, 18, 5, 540, 'veg', 3, 'mess_menu', ['poori bhaji', 'palak puri']]),
+  dish(['paratha-curd', 'Aloo paratha with curd', 'mess-shared', ['breakfast'], '2 paratha + curd', 260, 430, 11, 52, 18, 5, 490, 'veg', 2.5, 'mess_menu', ['mix paratha', 'gobi paratha', 'methi paratha', 'paneer paratha']]),
+  dish(['upma', 'Rava upma', 'mess-shared', ['breakfast'], '1 plate / 200 g', 200, 230, 6, 38, 7, 3, 480, 'veg', 1.5, 'mess_menu', ['upma']]),
+  dish(['sabudana-khichdi', 'Sabudana khichdi', 'mess-shared', ['breakfast'], '1 plate / 180 g', 180, 310, 4, 52, 10, 2, 360, 'veg', 2, 'mess_menu']),
+  dish(['bbj', 'Bread butter jam', 'mess-shared', ['breakfast', 'snack'], '2 slices + butter + jam', 90, 210, 5, 28, 8, 1, 240, 'veg', 1, 'tender', ['bbj']]),
+  dish(['cornflakes-milk', 'Cornflakes with milk', 'mess-shared', ['breakfast'], '30 g cereal + 150 ml milk', 180, 195, 7, 32, 4, 1, 140, 'veg', 0, 'tender', ['chocos', 'oats', 'muesli']]),
+  dish(['boiled-egg', 'Boiled eggs', 'mess-shared', ['breakfast', 'lunch', 'dinner'], '2 eggs', 100, 155, 13, 1, 11, 0, 140, 'egg', 0, 'tender', ['egg', 'anda']]),
+  dish(['omelette', 'Omelette', 'mess-shared', ['breakfast', 'snack'], '2-egg omelette', 120, 190, 13, 2, 14, 0, 280, 'egg', 1, 'tender', ['full fry', 'half fry', 'egg bhurji']]),
+  dish(['banana', 'Banana', 'mess-shared', ['breakfast'], '1 medium', 118, 105, 1, 27, 0, 3, 1, 'veg', 0, 'tender']),
+  dish(['milk-200', 'Milk', 'mess-shared', ['breakfast', 'snack'], '200 ml glass', 200, 122, 6, 10, 6, 0, 90, 'veg', 0, 'tender']),
+  dish(['tea', 'Mess tea', 'mess-shared', ['breakfast', 'snack'], '1 cup / 150 ml', 150, 45, 1, 7, 1, 0, 15, 'veg', 0, 'mess_menu', ['chai', 'coffee']]),
+  dish(['roti', 'Chapati', 'mess-shared', ['lunch', 'dinner'], '2 roti / 80 g', 80, 180, 6, 32, 4, 4, 220, 'veg', 0.5, 'tender', ['roti', 'chapati', 'phulka']]),
+  dish(['plain-rice', 'Steamed rice', 'mess-shared', ['lunch', 'dinner'], '1 plate / 180 g', 180, 230, 4, 50, 1, 1, 5, 'veg', 0, 'tender', ['white rice', 'plain rice']]),
+  dish(['dal-tadka', 'Dal tadka', 'mess-shared', ['lunch', 'dinner'], '1 katori / 150 g', 150, 145, 8, 18, 5, 4, 480, 'veg', 1, 'mess_menu', ['dal fry', 'tur dal', 'dal lehsuni', 'palak dal']]),
+  dish(['sambar', 'Sambar', 'mess-shared', ['breakfast', 'lunch'], '1 katori / 150 g', 150, 90, 4, 14, 3, 3, 520, 'veg', 1, 'mess_menu', ['rasam']]),
+  dish(['curd', 'Curd', 'mess-shared', ['lunch', 'dinner'], '1 katori / 100 g', 100, 62, 3, 5, 3, 0, 45, 'veg', 0, 'tender', ['dahi', 'raita', 'boondi raita', 'chaas', 'lassi']]),
+  dish(['salad', 'Cucumber carrot salad', 'mess-shared', ['lunch', 'dinner'], '1 katori / 80 g', 80, 25, 1, 5, 0, 2, 40, 'veg', 0, 'mess_menu', ['tandoori salad']]),
+  dish(['papad', 'Fried papad', 'mess-shared', ['lunch', 'dinner'], '1 papad', 15, 55, 2, 6, 3, 1, 180, 'veg', 1, 'tender', ['fryums', 'roasted papad']]),
+  dish(['mix-veg', 'Mix veg sabzi', 'mess-shared', ['lunch', 'dinner'], '1 katori / 150 g', 150, 130, 4, 14, 7, 4, 430, 'veg', 1.5, 'mess_menu', ['aloo methi', 'aloo mutter gobi', 'bhindi masala', 'veg tawa']]),
+  dish(['rajma', 'Rajma masala', 'mess-shared', ['lunch', 'dinner'], '1 katori / 160 g', 160, 210, 10, 28, 6, 7, 520, 'veg', 1.5, 'mess_menu', ['rajma masala dry']]),
+  dish(['chole', 'Chole', 'mess-shared', ['lunch', 'dinner'], '1 katori / 160 g', 160, 230, 10, 30, 8, 8, 540, 'veg', 2, 'mess_menu', ['chana masala', 'chole bhature']]),
+  dish(['paneer-butter', 'Paneer butter masala', 'mess-shared', ['lunch', 'dinner'], '1 katori / 160 g', 160, 280, 12, 12, 20, 2, 610, 'veg', 2.5, 'mess_menu', ['paneer tikka masala', 'palak paneer', 'kadai paneer', 'malai kofta']]),
+  dish(['kadhi-pakoda', 'Kadhi pakoda', 'mess-shared', ['lunch', 'dinner'], '1 katori / 180 g', 180, 190, 6, 18, 10, 2, 470, 'veg', 2, 'mess_menu', ['kadi pakoda']]),
+  dish(['khichdi', 'Dal khichdi', 'mess-shared', ['lunch', 'dinner'], '1 plate / 220 g', 220, 260, 9, 42, 6, 4, 480, 'veg', 1, 'mess_menu', ['dal khichadi']]),
+  dish(['veg-pulao', 'Veg pulao', 'mess-shared', ['lunch', 'dinner'], '1 plate / 200 g', 200, 280, 6, 48, 7, 3, 510, 'veg', 1.5, 'mess_menu', ['jeera rice', 'lemon rice', 'tomato rice', 'kashmiri pulao']]),
+  dish(['chicken-curry', 'Chicken masala extra', 'mess-shared', ['lunch', 'dinner'], '225 g / 3 pcs', 225, 320, 28, 6, 20, 1, 640, 'nonveg', 2, 'tender', ['chicken fry', 'chicken handi', 'chicken sukka', 'egg masala'], { priceInr: 55 }]),
+  dish(['egg-curry', 'Egg curry extra', 'mess-shared', ['lunch', 'dinner'], '2 eggs + gravy', 200, 260, 16, 8, 18, 1, 580, 'egg', 2, 'tender', [], { priceInr: 40 }]),
+  dish(['chole-bhature', 'Chole bhature', 'mess-shared', ['lunch'], '2 bhature + chole', 320, 520, 14, 68, 20, 8, 780, 'veg', 4, 'mess_menu']),
+  dish(['pav-bhaji', 'Pav bhaji', 'mess-shared', ['snack'], '2 pav + bhaji', 280, 430, 10, 58, 16, 7, 820, 'veg', 3, 'mess_menu']),
+  dish(['samosa', 'Samosa', 'mess-shared', ['snack'], '1 piece / 70 g', 70, 180, 4, 20, 10, 2, 280, 'veg', 2, 'mess_menu', ['bread pakoda', 'chinese samosa']]),
+  dish(['maggi-mess', 'Fried maggi', 'mess-shared', ['snack'], '1 plate', 180, 340, 8, 46, 14, 3, 890, 'veg', 2, 'mess_menu', ['maggi']]),
+  dish(['bhel', 'Mixed bhel', 'mess-shared', ['snack'], '1 plate / 120 g', 120, 180, 5, 32, 4, 4, 420, 'veg', 1, 'mess_menu']),
+  dish(['gulab-jamun', 'Gulab jamun', 'mess-shared', ['lunch', 'dinner'], '2 pieces', 80, 220, 3, 32, 9, 0, 90, 'veg', 1, 'mess_menu', ['rasgulla', 'rasmalai', 'shahi tukda', 'jalebi', 'shrikhand']]),
+  dish(['chicken-biryani-extra', 'Chicken biryani extra', 'mess-shared', ['dinner'], '3 pcs + rice', 320, 480, 28, 52, 16, 2, 820, 'nonveg', 2, 'tender', ['veg biryani'], { priceInr: 55 }]),
+  dish(['chilli-paneer', 'Chilli paneer dry extra', 'mess-shared', ['dinner'], '225 g', 225, 310, 16, 14, 20, 2, 780, 'veg', 3, 'tender', ['paneer 65', 'paneer chilly'], { priceInr: 40 }]),
+];
+
+export const MESS_DISHES: CampusDish[] = shared.flatMap((item) =>
+  forEveryMess({
+    ...item,
+    id: item.id,
+  }),
+);

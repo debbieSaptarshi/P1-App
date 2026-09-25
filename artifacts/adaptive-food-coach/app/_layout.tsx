@@ -1,3 +1,4 @@
+import '@/services/webcrypto';
 import React, { useEffect } from 'react';
 import { AuthGate } from '@/components/AuthGate';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -10,8 +11,14 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
-  useFonts,
 } from '@expo-google-fonts/inter';
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  useFonts,
+} from '@expo-google-fonts/poppins';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
@@ -25,6 +32,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: 'Back', headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
       <Stack.Screen name="scan" options={{ headerShown: false }} />
       <Stack.Screen name="log-food" options={{ headerShown: false }} />
@@ -32,6 +40,9 @@ function RootLayoutNav() {
       <Stack.Screen name="milestones" options={{ headerShown: false }} />
       <Stack.Screen name="group" options={{ headerShown: false }} />
       <Stack.Screen name="profile-edit" options={{ headerShown: false }} />
+      <Stack.Screen name="profile" options={{ headerShown: false }} />
+      <Stack.Screen name="programs" options={{ headerShown: false }} />
+      <Stack.Screen name="track" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -42,6 +53,10 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
   });
 
   useEffect(() => {

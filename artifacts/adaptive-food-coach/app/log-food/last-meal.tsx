@@ -8,6 +8,7 @@ import { Stack, useRouter } from 'expo-router';
 import { CircleIconButton } from '@/components/meals/CircleIconButton';
 import { LastMealCard } from '@/components/meals/LastMealCard';
 import { LAST_MEALS } from '@/constants/lastMeals';
+import { MemberPicker } from '@/components/meals/MemberPicker';
 import { colors, spacing } from '@/constants/tokens';
 
 const iconBack = require('@/assets/images/nutrition/icon-back.svg');
@@ -20,7 +21,7 @@ const iconBack = require('@/assets/images/nutrition/icon-back.svg');
  */
 export default function LastMealListScreen() {
   const router = useRouter();
-  const { state } = useAppStore();
+  const { state, actions } = useAppStore();
   const meals = demoMode ? LAST_MEALS : recentMeals(state.foodLogs);
   const insets = useSafeAreaInsets();
 
@@ -36,6 +37,13 @@ export default function LastMealListScreen() {
         />
         <Text style={styles.title}>Last  Meal</Text>
         <View style={styles.headerSpacer} />
+      </View>
+      <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
+        <MemberPicker
+          members={state.careHousehold.members}
+          selectedId={state.careHousehold.selectedMemberId}
+          onSelect={(id) => void actions.selectCareMember(id)}
+        />
       </View>
 
       <ScrollView

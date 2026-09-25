@@ -8,6 +8,7 @@ export interface TextFieldProps extends TextInputProps {
   error?: string;
   trailingIcon?: React.ReactNode;
   leadingIcon?: React.ReactNode;
+  variant?: 'default' | 'pill';
 }
 
 export function TextField({
@@ -16,22 +17,25 @@ export function TextField({
   error,
   trailingIcon,
   leadingIcon,
+  variant = 'default',
   style,
   ...rest
 }: TextFieldProps) {
+  const pill = variant === 'pill';
   return (
     <View style={styles.field}>
-      {label != null && <Text style={styles.label}>{label}</Text>}
+      {label != null && !pill && <Text style={styles.label}>{label}</Text>}
       <View
         style={[
           styles.inputWrap,
-          { borderColor: error ? colors.accentRed : colors.input },
+          pill && styles.inputWrapPill,
+          { borderColor: error ? colors.accentRed : pill ? 'transparent' : colors.input },
         ]}
       >
         {leadingIcon != null && <View style={styles.leadingIcon}>{leadingIcon}</View>}
         <TextInput
-          style={[styles.input, style]}
-          placeholderTextColor={colors.textPlaceholder}
+          style={[styles.input, pill && styles.inputPill, style]}
+          placeholderTextColor={pill ? colors.formPlaceholder : colors.textPlaceholder}
           {...rest}
         />
         {trailingIcon != null && <View style={styles.trailingIcon}>{trailingIcon}</View>}
@@ -62,6 +66,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     paddingHorizontal: spacing.md,
   },
+  inputWrapPill: {
+    height: 60,
+    borderRadius: radii.xl,
+    backgroundColor: colors.formFill,
+    borderWidth: 0,
+    paddingHorizontal: 20,
+  },
   leadingIcon: { marginRight: spacing.xs },
   trailingIcon: { marginLeft: spacing.xs },
   input: {
@@ -70,6 +81,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
     paddingVertical: 0,
+  },
+  inputPill: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
   },
   helper: {
     fontFamily: 'Inter_400Regular',

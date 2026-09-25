@@ -1,271 +1,111 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
-import { Button, ProgressBar } from '@/components/ui';
+import React, { useEffect } from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { CheckCircleIcon } from '@/components/icons/OnboardingIcons';
+import { colors } from '@/constants/tokens';
 import { useAppStore } from '@/hooks/useAppStore';
-import { colors, radii, spacing } from '@/constants/tokens';
+import { OnboardingShell } from './_components/OnboardingShell';
+import { continueToNextStep } from './_components/navigate';
+import { progressFor } from './_components/progress';
 
-const TOTAL_STEPS = 10;
-const STEP_NUM = 9;
-
-/**
- * Animated "building your plan" screen. Persists a `generating: true` flag
- * to the store, runs a 3-stage progress timeline, then transitions to the
- * `complete` screen where the answers are committed to the user profile.
- */
 export default function GeneratingPlanScreen() {
   const router = useRouter();
   const { actions, state } = useAppStore();
-  const insets = useSafeAreaInsets();
-
-  const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState(0);
-  const stageTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
-
-  const pulse = useSharedValue(0);
+  const appear = useSharedValue(0);
 
   useEffect(() => {
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      true,
-    );
-    return () => {
-      pulse.value = 0;
-      for (const t of stageTimers.current) clearTimeout(t);
-    };
-  }, [pulse]);
+    appear.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
+  }, [appear]);
 
-  useEffect(() => {
-    let active = true;
-    setStage(1); setProgress(30);
-    void actions.advanceOnboarding(9, state.onboarding.answers).then(() => {
-      if (active) { setStage(3); setProgress(100); router.replace('/(onboarding)/complete'); }
-    });
-    return () => { active = false; };
-  }, [router]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    opacity: 0.5 + pulse.value * 0.45,
-    transform: [{ scale: 0.95 + pulse.value * 0.06 }],
+  const heroStyle = useAnimatedStyle(() => ({
+    opacity: 0.35 + appear.value * 0.65,
+    transform: [{ scale: 0.94 + appear.value * 0.06 }],
   }));
 
-  const staggerStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 0.95 + pulse.value * 0.05 }],
-  }));
+  const handleContinue = async () => {
+    await continueToNextStep(router, actions, 'generating-plan', state.onboarding.answers);
+  };
 
   return (
-    <View style={styles.flex}>
-      <View style={{ paddingTop: insets.top + spacing.sm, paddingHorizontal: spacing.lg }}>
-        <ProgressBar progress={STEP_NUM / TOTAL_STEPS} />
-      </View>
-
+    <OnboardingShell
+      progress={progressFor('generating-plan')}
+      title={undefined}
+      subtitle={null}
+      onContinue={handleContinue}
+      bodyCentered
+    >
       <View style={styles.center}>
-        <Animated.View style={[styles.crest, pulseStyle]}>
-          <Animated.View style={[styles.crestInner, staggerStyle]}>
-            <Feather name="zap" size={36} color={colors.textInverse} />
-          </Animated.View>
-        </Animated.View>
-
-        <Text style={styles.title}>Saving your preferences…</Text>
-        <Text style={styles.subtitle}>
-          Your answers will be available across your devices. You can ask the coach for meal ideas after setup.
-        </Text>
-
-        <View style={styles.stageList}>
-          {STAGES.map((s, idx) => {
-            const active = idx === stage - 1 || (stage === STAGES.length && idx === STAGES.length - 1);
-            const done = idx < stage - 1 || stage === STAGES.length;
-            return (
-              <StageRow
-                key={s.label}
-                label={s.label}
-                icon={s.icon as keyof typeof Feather.glyphMap}
-                state={done ? 'done' : active ? 'active' : 'queued'}
+        <Animated.View style={heroStyle}>
+          <LinearGradient
+            colors={['#84CAFF', '#9B8AFB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.ring}
+          >
+            <View style={styles.inner}>
+              <Image
+                source={require('@/assets/images/onboarding/fireworks.png')}
+                style={styles.art}
+                resizeMode="cover"
               />
-            );
-          })}
+            </View>
+          </LinearGradient>
+        </Animated.View>
+        <View style={styles.done}>
+          <CheckCircleIcon size={18} />
+          <Text style={styles.doneText}>All Done</Text>
         </View>
+        <Text style={styles.title}>{`Time to generate\nyour custom plan!`}</Text>
       </View>
-
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
-        <View style={styles.progressBarWrap}>
-          <ProgressBar progress={progress / 100} color={colors.primary} />
-          <Text style={styles.progressText}>
-            {Math.round(progress)}% · Hang tight, coach-grade personalization takes a beat.
-          </Text>
-        </View>
-        <Button
-          title="Skip — open the dashboard"
-          variant="ghost"
-          onPress={() => router.replace('/(onboarding)/complete')}
-        />
-      </View>
-    </View>
-  );
-}
-
-const STAGES = [
-  { label: 'Calibrating biometrics', icon: 'activity' },
-  { label: 'Selecting meal library', icon: 'book-open' },
-  { label: 'Tuning daily nudges', icon: 'bell' },
-];
-
-function StageRow({
-  label,
-  icon,
-  state,
-}: {
-  label: string;
-  icon: keyof typeof Feather.glyphMap;
-  state: 'queued' | 'active' | 'done';
-}) {
-  const appearance =
-    state === 'done'
-      ? {
-          bg: colors.primary,
-          fg: colors.textInverse,
-          iconName: 'check' as keyof typeof Feather.glyphMap,
-        }
-      : state === 'active'
-        ? { bg: colors.primarySoft, fg: colors.primary, iconName: icon }
-        : { bg: colors.card, fg: colors.textMuted, iconName: icon };
-
-  return (
-    <View style={styles.stageRow}>
-      <View style={[styles.stageBadge, { backgroundColor: appearance.bg }]}>
-        <Feather name={appearance.iconName} size={16} color={appearance.fg} />
-      </View>
-      <Text style={[styles.stageLabel, state === 'queued' && styles.stageLabelQueued]}>
-        {label}
-      </Text>
-      {state === 'active' ? (
-        <Text style={styles.stageStatus}>Working…</Text>
-      ) : state === 'done' ? (
-        <Text style={styles.stageStatusDone}>Done</Text>
-      ) : (
-        <Text style={styles.stageStatusQueued}>Queued</Text>
-      )}
-    </View>
+    </OnboardingShell>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background, paddingHorizontal: spacing.lg },
   center: {
-    flexGrow: 1,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: spacing.xl,
-    gap: spacing.lg,
+    gap: 16,
   },
-  crest: {
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    backgroundColor: colors.primarySoft,
+  ring: {
+    width: 300,
+    height: 300,
+    borderRadius: 150,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  crestInner: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.32,
-    shadowRadius: 22,
-    elevation: 12,
-  },
-  title: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 24,
-    lineHeight: 30,
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  stageList: {
-    alignSelf: 'stretch',
+  inner: {
+    width: 268,
+    height: 268,
+    borderRadius: 134,
+    overflow: 'hidden',
     backgroundColor: colors.card,
-    padding: spacing.md,
-    borderRadius: radii.lg,
-    gap: spacing.sm,
   },
-  stageRow: {
+  art: {
+    width: 268,
+    height: 268,
+  },
+  done: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 8,
   },
-  stageBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stageLabel: {
-    flex: 1,
-    fontFamily: 'Inter_600SemiBold',
+  doneText: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
+    lineHeight: 20,
+    color: '#475569',
+  },
+  title: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.2,
     color: colors.textPrimary,
-  },
-  stageLabelQueued: {
-    color: colors.textMuted,
-  },
-  stageStatus: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: colors.primary,
-  },
-  stageStatusDone: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: colors.accentGreen,
-  },
-  stageStatusQueued: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  footer: {
-    gap: spacing.sm,
-  },
-  progressBarWrap: {
-    gap: spacing.xs,
-  },
-  progressText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: colors.textMuted,
     textAlign: 'center',
   },
 });

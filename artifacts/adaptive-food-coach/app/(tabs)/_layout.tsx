@@ -16,11 +16,12 @@ import Animated, {
 type AddAction = { label: string; icon: keyof typeof Feather.glyphMap; href: Href };
 
 const ADD_ACTIONS: AddAction[] = [
-  { label: 'AI Coach & Meal Ideas', icon: 'message-circle', href: '/coach' },
+  { label: 'Track with AI', icon: 'message-circle', href: '/track' },
+  { label: 'Coach & Meal Ideas', icon: 'zap', href: '/coach' },
   { label: 'Scan Food', icon: 'maximize', href: '/scan/food-camera' },
   { label: 'Food Database', icon: 'search', href: '/log-food' },
   { label: 'Log Exercise', icon: 'activity', href: '/exercise' },
-  { label: 'Saved Foods', icon: 'bookmark', href: '/log-food/saved' },
+  { label: 'Saved Foods', icon: 'bookmark', href: '/log-food?tab=saved' },
 ];
 
 function CustomTabBar({ state, navigation }: any) {
@@ -134,13 +135,13 @@ function CustomTabBar({ state, navigation }: any) {
           style={styles.tabItem}
           onPress={() => {
             Haptics.selectionAsync();
-            navigation.navigate('profile');
+            navigation.navigate('programs');
           }}
-          accessibilityLabel="Profile tab"
+          accessibilityLabel="Programs tab"
           accessibilityRole="tab"
-          testID="tab-profile"
+          testID="tab-programs"
         >
-          <Feather name="user" size={24} color={state.index === 3 ? '#ffffff' : '#8E8E93'} />
+          <Feather name="compass" size={24} color={state.index === 3 ? '#ffffff' : '#8E8E93'} />
         </Pressable>
       </View>
 
@@ -221,7 +222,7 @@ export default function TabLayout() {
       <Tabs.Screen name="index" />
       <Tabs.Screen name="progress" />
       <Tabs.Screen name="community" />
-      <Tabs.Screen name="profile" />
+      <Tabs.Screen name="programs" />
     </Tabs>
   );
 }

@@ -1,13 +1,52 @@
 import { randomUUID } from 'node:crypto';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { analysisRequestSchema, analysisResultSchema, coachResultSchema, planResultSchema, exerciseResultSchema, AI_PROMPT_VERSION, type AiTask } from '@workspace/backend-contracts';
+import { analysisRequestSchema, analysisResultSchema, coachResultSchema, planResultSchema, exerciseResultSchema, foodPlateRequestSchema, AI_PROMPT_VERSION, type AiTask, type AnalysisResult } from '@workspace/backend-contracts';
 import { admin, dbError } from '../lib/supabase';
 import { config } from '../lib/config';
 import { HttpError } from '../lib/errors';
 import { providerFor, type ModelInput } from '../ai/providers';
 import { SYSTEM, foodOutput, coachOutput, planOutput, exerciseOutput } from '../ai/schemas';
+import { CAMPUS_FOOD_SYSTEM, catalogPromptRows, groundMeal, matchCampusFood } from '@workspace/campus-food';
+import { foodPlateCacheKey, generateFoodPlate } from '../ai/food-plate';
 export const aiRouter = Router();
+
+function blank(value?: string) {
+  return value && value.trim() ? value : undefined;
+}
+
+export function applyCatalogNutrition(result: AnalysisResult): AnalysisResult {
+  const grounded = groundMeal(result.foods.map((food) => ({
+    ...food,
+    catalogId: blank(food.catalogId),
+    outletId: blank(food.outletId),
+  })));
+  return {
+    ...result,
+    foods: grounded.foods.map((food) => ({
+      name: food.name,
+      servingSize: food.servingSize,
+      calories: food.calories,
+      protein: food.protein,
+      carbs: food.carbs,
+      fat: food.fat,
+      fiber: food.fiber,
+      sodium: food.sodium,
+      confidence: food.confidence,
+      catalogId: food.catalogId,
+      outletId: food.outletId,
+      portionGrams: food.portionGrams,
+      oilTsp: food.oilTsp,
+      matchMethod: food.matchMethod,
+      caloriesLow: food.caloriesLow,
+      caloriesHigh: food.caloriesHigh,
+    })),
+    warnings: [...result.warnings, ...grounded.warnings].slice(0, 20),
+    assumptions: grounded.assumptions,
+    missingInputs: grounded.missingInputs,
+    contextGuess: grounded.contextGuess,
+  };
+}
 export function validateImage(image?: { base64: string; mediaType: string }) {
   if (!image) return;
   const bytes = Buffer.from(image.base64, 'base64');
@@ -49,8 +88,69 @@ async function execute(req: Request, task: AiTask, input: ModelInput, schema: z.
 }
 aiRouter.post('/analyze', async (req,res) => {
   const input = analysisRequestSchema.parse(req.body); validateImage(input.image);
-  const result = await execute(req,input.kind,{ system:SYSTEM, text:JSON.stringify({ task:input.kind, description:input.text ?? '', preferences:await context(req.user.id) }), image:input.image, schema:foodOutput },analysisResultSchema);
-  res.json(result);
+  const catalog = matchCampusFood({ text: input.text, hostel: input.hostel, outletId: input.outletId, mealSlot: input.mealSlot, limit: 24 });
+  const raw = await execute(req, input.kind, {
+    system: CAMPUS_FOOD_SYSTEM,
+    text: JSON.stringify({
+      task: input.kind,
+      description: input.text ?? '',
+      hostel: input.hostel ?? '',
+      outletId: input.outletId ?? '',
+      mealSlot: input.mealSlot ?? '',
+      campusCatalog: catalogPromptRows(catalog),
+      preferences: await context(req.user.id),
+      estimateVisiblePortion: input.kind === 'food',
+    }),
+    image: input.image,
+    imageDetail: input.kind === 'food' ? 'high' : 'auto',
+    schema: foodOutput,
+  }, analysisResultSchema);
+  res.json(applyCatalogNutrition(raw));
+});
+aiRouter.post('/food-plate', async (req, res) => {
+  const input = foodPlateRequestSchema.parse(req.body);
+  validateImage(input.image);
+  const c = config();
+  const model = c.OPENAI_IMAGE_MODEL;
+  const cacheKey = foodPlateCacheKey(input.foods, model, input.image);
+  const existing = await admin().from('food_plate_cache').select('image_b64,media_type,model').eq('cache_key', cacheKey).maybeSingle();
+  dbError(existing.error);
+  if (existing.data?.image_b64) {
+    res.json({ cacheKey, cached: true, mediaType: existing.data.media_type, imageBase64: existing.data.image_b64, model: existing.data.model });
+    return;
+  }
+  const requestId = randomUUID();
+  const requestKey = z.string().uuid().parse(req.header('Idempotency-Key'));
+  const reservation = await admin().rpc('reserve_ai_request', {
+    p_user: req.user.id, p_id: requestId, p_key: requestKey, p_task: 'plate',
+    p_provider: 'openai', p_model: model, p_version: AI_PROMPT_VERSION, p_limit: c.AI_DAILY_LIMIT,
+  });
+  dbError(reservation.error);
+  const record = reservation.data;
+  if (record.task !== 'plate') throw new HttpError(409, 'IDEMPOTENCY_CONFLICT', 'This request key was used for another operation.');
+  if (record.id !== requestId) {
+    if (record.status === 'completed' && record.result && typeof record.result === 'object' && record.result && 'cacheKey' in record.result) {
+      const cached = await admin().from('food_plate_cache').select('image_b64,media_type,model').eq('cache_key', String((record.result as { cacheKey: string }).cacheKey)).maybeSingle();
+      dbError(cached.error);
+      if (cached.data?.image_b64) {
+        res.json({ cacheKey: String((record.result as { cacheKey: string }).cacheKey), cached: true, mediaType: cached.data.media_type, imageBase64: cached.data.image_b64, model: cached.data.model });
+        return;
+      }
+    }
+    throw new HttpError(409, 'AI_REQUEST_EXISTS', record.status === 'pending' ? 'This request is already processing. Try again shortly with the same request.' : 'This request failed. Start a new request to retry.');
+  }
+  try {
+    const plate = await generateFoodPlate(input.foods, input.image);
+    const result = { cacheKey, cached: false, mediaType: plate.mediaType, imageBase64: plate.imageBase64, model: plate.model };
+    const stored = await admin().from('food_plate_cache').upsert({ cache_key: cacheKey, media_type: plate.mediaType, image_b64: plate.imageBase64, model: plate.model });
+    dbError(stored.error);
+    const update = await admin().from('ai_requests').update({ status: 'completed', result: { cacheKey, cached: false, mediaType: plate.mediaType, model: plate.model }, completed_at: new Date().toISOString() }).eq('id', requestId).eq('user_id', req.user.id);
+    dbError(update.error);
+    res.json(result);
+  } catch (error) {
+    await admin().from('ai_requests').update({ status: 'failed', error_code: error instanceof HttpError ? error.code : 'AI_ERROR', completed_at: new Date().toISOString() }).eq('id', requestId).eq('user_id', req.user.id);
+    throw error;
+  }
 });
 const promptSchema = z.object({ message:z.string().trim().min(1).max(4000), consent:z.literal(true), history:z.array(z.object({ role:z.enum(['user','assistant']), content:z.string().max(6000) })).max(12).default([]) });
 for (const task of ['coach','plan','exercise'] as const) {

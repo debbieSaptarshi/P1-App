@@ -1,271 +1,209 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
-import { Button, Header, ProgressBar } from '@/components/ui';
+import React, { useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ProgressBar } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/tokens';
+import { buildCustomPlan } from '@/lib/customPlan';
 import { useAppStore } from '@/hooks/useAppStore';
-
-const TOTAL_STEPS = 10;
-const STEP_NUM = 10;
+import { OnboardingShell } from './_components/OnboardingShell';
+import { progressFor } from './_components/progress';
 
 export default function CompleteScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { actions, state } = useAppStore();
+  const plan = useMemo(() => buildCustomPlan(state.onboarding.answers), [state.onboarding.answers]);
 
-  const [committing, setCommitting] = useState(false);
-  const committed = useRef(false);
-
-  const ring = useSharedValue(0);
-  const ringScale = useSharedValue(0.7);
-  const check = useSharedValue(0);
-  const title = useSharedValue(0);
-  const stats = useSharedValue(0);
-
-  useEffect(() => {
-    ring.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
-    ringScale.value = withSequence(
-      withTiming(1.18, { duration: 320, easing: Easing.out(Easing.quad) }),
-      withTiming(1, { duration: 240, easing: Easing.inOut(Easing.quad) }),
-    );
-    check.value = withDelay(360, withTiming(1, { duration: 350 }));
-    title.value = withDelay(540, withTiming(1, { duration: 420 }));
-    stats.value = withDelay(900, withTiming(1, { duration: 380 }));
-  }, [ring, ringScale, check, title, stats]);
-
-  // Persistence: completeOnboarding reads the same on-disk answer map and
-  // mirrors the canonical fields onto the user profile. We commit once on
-  // mount so the dashboard is hydrated even if the user dismisses this screen.
-  useEffect(() => {
-    if (committed.current) return;
-    committed.current = true;
-    void actions.completeOnboarding(state.onboarding.answers);
-  }, [actions, state.onboarding.answers]);
-
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: ring.value,
-    transform: [{ scale: ringScale.value }],
-  }));
-
-  const checkStyle = useAnimatedStyle(() => ({
-    opacity: check.value,
-    transform: [{ scale: 0.7 + check.value * 0.3 }],
-  }));
-
-  const titleStyle = useAnimatedStyle(() => ({
-    opacity: title.value,
-    transform: [{ translateY: (1 - title.value) * 12 }],
-  }));
-
-  const statsStyle = useAnimatedStyle(() => ({
-    opacity: stats.value,
-    transform: [{ translateY: (1 - stats.value) * 16 }],
-  }));
-
-  const handleStart = async () => {
-    if (committing) return;
-    setCommitting(true);
-    try {
-      router.replace('/(tabs)');
-    } finally {
-      setCommitting(false);
-    }
+  const handleContinue = async () => {
+    await actions.completeOnboarding(state.onboarding.answers);
+    router.replace('/(tabs)');
   };
 
   return (
-    <ScrollView
-      style={[styles.flex, { paddingTop: insets.top }]}
-      contentContainerStyle={[
-        styles.scroll,
-        { paddingBottom: insets.bottom + spacing.xl },
-      ]}
-      showsVerticalScrollIndicator={false}
+    <OnboardingShell
+      progress={progressFor('complete')}
+      title={undefined}
+      subtitle={null}
+      continueTitle="Let’s Get Started"
+      onContinue={handleContinue}
     >
-      <View style={{ paddingHorizontal: spacing.lg }}>
-        <Header subtitle={`Step ${STEP_NUM} of ${TOTAL_STEPS}`} showBack={false} />
-        <View style={styles.progressWrap}>
-          <ProgressBar progress={1} />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Congratulations your custom plan is ready!</Text>
+        <Text style={styles.should}>
+          {plan.direction === 'gain' ? 'You should gain :' : 'You should lose :'}
+        </Text>
+        <View style={styles.pill}>
+          <Text style={styles.pillText}>{plan.targetLabel}</Text>
         </View>
-      </View>
-
-      <View style={styles.center}>
-        <View style={styles.iconStack}>
-          <Animated.View style={[styles.iconRing, ringStyle]} />
-          <Animated.View style={[styles.iconBadge, checkStyle]}>
-            <Feather name="check" size={42} color={colors.textInverse} />
-          </Animated.View>
+        <Text style={styles.heading}>Daily Recommendation</Text>
+        <View style={styles.statStack}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>🔥 Calories</Text>
+            <Text style={styles.statValue}>{plan.calories}</Text>
+          </View>
+          <View style={styles.statRow}>
+            <MacroCard label="🥚 Protein" value={plan.protein} unit="g" />
+            <MacroCard label="🍞 Carbs" value={plan.carbs} unit="g" />
+            <MacroCard label="🥑 Fats" value={plan.fat} unit="g" />
+          </View>
+          <View style={styles.statRow}>
+            <MacroCard label="🍎 Fiber" value={plan.fiber.toFixed(1)} unit="g" />
+            <MacroCard label="🍧 Sugar" value={plan.sugar.toFixed(1)} unit="g" />
+            <MacroCard label="🍚 Sodium" value={plan.sodium} unit="mg" />
+          </View>
+          <View style={styles.healthCard}>
+            <View style={styles.healthRow}>
+              <Text style={styles.healthLabel}>Health Score</Text>
+              <Text style={styles.healthValue}>{plan.healthScore}/10</Text>
+            </View>
+            <ProgressBar
+              progress={plan.healthScore / 10}
+              backgroundColor="#1E293B"
+              color="#1570EF"
+              height={14}
+            />
+          </View>
         </View>
-
-        <Animated.View style={[styles.textBlock, titleStyle]}>
-          <Text style={styles.kicker}>YOU&apos;RE ALL SET</Text>
-          <Text style={styles.title}>Your profile is ready</Text>
-          <Text style={styles.subtitle}>
-            Your preferences are saved. Review your daily targets in Profile and ask the coach for meal ideas.
-          </Text>
-        </Animated.View>
-
-        <Animated.View style={[styles.statsRow, statsStyle]}>
-          <StatBadge value="3" label="Daily meals" icon="book-open" />
-          <StatBadge value="5+" label="Weekly tips" icon="bell" />
-          <StatBadge value="1" label="First check-in" icon="calendar" />
-        </Animated.View>
-      </View>
-
-      <View style={[styles.footer, { paddingHorizontal: spacing.lg }]}>
-        <Button
-          title={committing ? 'Opening dashboard…' : 'Start Coaching'}
-          onPress={handleStart}
-          loading={committing}
-          trailingIcon="arrow-right"
-        />
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </OnboardingShell>
   );
 }
 
-function StatBadge({
-  value,
+function MacroCard({
   label,
-  icon,
+  value,
+  unit,
 }: {
-  value: string;
   label: string;
-  icon: keyof typeof Feather.glyphMap;
+  value: number | string;
+  unit: string;
 }) {
   return (
-    <View style={styles.statCard}>
-      <View style={styles.statBadge}>
-        <Feather name={icon} size={16} color={colors.primary} />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
+    <View style={styles.macroCard}>
       <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.macroValue}>
+        {value} <Text style={styles.macroUnit}>{unit}</Text>
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
+  scrollView: { flex: 1 },
   scroll: {
-    flexGrow: 1,
-  },
-  progressWrap: {
-    paddingVertical: spacing.sm,
-  },
-  center: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: spacing.xxl,
-    gap: spacing.xl,
-  },
-  iconStack: {
-    width: 132,
-    height: 132,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconRing: {
-    position: 'absolute',
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  iconBadge: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.32,
-    shadowRadius: 22,
-    elevation: 12,
-  },
-  textBlock: {
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-  },
-  kicker: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    color: colors.accentGreen,
-    letterSpacing: 1.4,
+    gap: 16,
+    paddingBottom: 8,
   },
   title: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 26,
-    lineHeight: 32,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.2,
     color: colors.textPrimary,
     textAlign: 'center',
-    letterSpacing: -0.4,
   },
-  subtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.textMuted,
+  should: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 20,
+    lineHeight: 24,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
-  statsRow: {
-    flexDirection: 'row',
-    alignSelf: 'stretch',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
+  pill: {
+    alignSelf: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  pillText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textPrimary,
+  },
+  heading: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 20,
+    lineHeight: 24,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  statStack: {
+    gap: 8,
   },
   statCard: {
+    backgroundColor: colors.card,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  macroCard: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: spacing.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  statBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.lg,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statValue: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    color: colors.textPrimary,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    minWidth: 0,
   },
   statLabel: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    color: colors.textMuted,
-    textAlign: 'center',
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    color: colors.textPrimary,
+    marginBottom: 4,
   },
-  footer: {
-    gap: spacing.sm,
-    paddingTop: spacing.xl,
+  statValue: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.15,
+    color: colors.textPrimary,
+  },
+  macroValue: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.15,
+    color: colors.textPrimary,
+  },
+  macroUnit: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 12,
+    color: colors.textMuted,
+  },
+  healthCard: {
+    backgroundColor: colors.darkSurface,
+    borderRadius: radii.xl,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  healthRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  healthLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: colors.textInverse,
+  },
+  healthValue: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: colors.textInverse,
   },
 });

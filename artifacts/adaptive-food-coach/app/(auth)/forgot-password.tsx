@@ -72,8 +72,7 @@ export default function ForgotPasswordScreen() {
           <Text style={styles.kicker}>FORGOT PASSWORD</Text>
           <Text style={styles.title}>Reset your password</Text>
           <Text style={styles.subtitle}>
-            Enter the email address linked to your Adaptive Coach account and we&apos;ll send a
-            one-time password to verify it&apos;s really you.
+            Enter the email on this account. We send a 6-digit code — not a confirmation link.
           </Text>
         </View>
 

@@ -1,0 +1,13 @@
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/.expo
+**/dist
+**/coverage
+**/*.tsbuildinfo
+expo-go-qr.png
+.git
+.cursor
+.supabase
+.pnpm-store

@@ -13,8 +13,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing } from '@/constants/tokens';
-import { Button, Card, ModalSheet, SectionTitle } from '@/components/ui';
+import { Button, Card, Header, ModalSheet, SectionTitle } from '@/components/ui';
 import { appStoreActions, useAppStore } from '@/hooks/useAppStore';
+import { homeLayoutLabel } from '@/constants/homeLayouts';
+import { resolveProgram, resolveProgramHome } from '@/constants/programs';
 
 type ProfileHref =
   | '/profile-edit/weight'
@@ -22,7 +24,9 @@ type ProfileHref =
   | '/profile-edit/dob'
   | '/profile-edit/steps'
   | '/profile-edit/nutrients'
-  | '/profile-edit/preferences';
+  | '/profile-edit/preferences'
+  | '/profile-edit/home'
+  | '/profile-edit/subscription';
 
 interface DetailRow {
   key: string;
@@ -70,7 +74,7 @@ const DIET_LABELS: Record<string, string> = {
 };
 
 /**
- * Profile tab landing.
+ * Profile screen (pushed from the Home avatar and the Programs tab).
  *
  * - Avatar + name + edit pencil
  * - Three Card sections (Personal Details, Daily Goals, Activity)
@@ -146,17 +150,37 @@ export default function ProfileScreen() {
     },
   ];
 
+  const homeRows: DetailRow[] = [
+    {
+      key: 'home',
+      label: 'Home screen',
+      value: homeLayoutLabel(
+        resolveProgramHome({
+          programId: state.preferences.programId,
+          layoutOverride: state.preferences.homeLayout,
+        }).layout,
+      ),
+      href: '/profile-edit/home',
+    },
+    {
+      key: 'program',
+      label: 'Programme',
+      value: resolveProgram(state.preferences.programId).title,
+      href: '/profile-edit/subscription',
+    },
+  ];
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <Header title="Profile" rightIcon="shield" onRightPress={() => router.push('/profile-edit/privacy')} />
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + spacing.md,
+          paddingTop: spacing.xs,
           paddingHorizontal: spacing.lg,
           paddingBottom: insets.bottom + spacing.xxxl,
         }}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={() => router.push('/profile-edit/privacy')} style={{ paddingVertical: 12 }}><Text>Privacy, export & account deletion</Text></Pressable>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.identity}>
@@ -200,6 +224,12 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <SectionTitle title="Activity" />
           <DetailCard title="Habits" rows={activityRows} />
+        </View>
+
+        {/* Home layout */}
+        <View style={styles.section}>
+          <SectionTitle title="Home" />
+          <DetailCard title="Layout" rows={homeRows} />
         </View>
 
         {/* Subscription & Preferences */}

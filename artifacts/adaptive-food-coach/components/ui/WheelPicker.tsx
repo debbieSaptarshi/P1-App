@@ -15,6 +15,7 @@ export interface WheelPickerProps {
   onChange?: (value: string) => void;
   itemHeight?: number;
   visibleItemCount?: number;
+  variant?: 'light' | 'dark';
 }
 
 export function WheelPicker({
@@ -23,6 +24,7 @@ export function WheelPicker({
   onChange,
   itemHeight = 44,
   visibleItemCount = 5,
+  variant = 'light',
 }: WheelPickerProps) {
   const ref = useRef<ScrollView>(null);
   const sidePadding = (visibleItemCount - 1) / 2;
@@ -58,8 +60,13 @@ export function WheelPicker({
             <Text
               style={[
                 styles.itemText,
-                { color: v === value ? colors.textPrimary : colors.textPlaceholder },
-                v === value && styles.itemTextActive,
+                {
+                  color:
+                    v === value
+                      ? variant === 'dark' ? '#000000' : colors.textPrimary
+                      : variant === 'dark' ? '#F1F5F9' : colors.textPlaceholder,
+                },
+                v === value && (variant === 'dark' ? styles.itemTextActiveDark : styles.itemTextActive),
               ]}
             >
               {v}
@@ -89,5 +96,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 28,
     letterSpacing: -0.5,
+  },
+  itemTextActiveDark: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    letterSpacing: -0.18,
   },
 });

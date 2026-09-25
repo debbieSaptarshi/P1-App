@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing } from '@/constants/tokens';
 import { Button, Card, Header } from '@/components/ui';
 import { appStoreActions, useAppStore } from '@/hooks/useAppStore';
+import { SUPPORT_EMAIL } from '@/constants/legal';
 import { groupProfileHref, profileIdFromName } from '../_profileNav';
 
 interface CommentDraft {
@@ -155,7 +156,7 @@ export default function PostDetailScreen() {
             </View>
             <Text style={styles.body}>{livePost.body}</Text>
             {!demoMode && livePost.authorId !== state.profile.id ? <View style={{ flexDirection: 'row', gap: 20, marginTop: 16 }}>
-              <Pressable onPress={async () => { try { await api(`/community/posts/${id}/report`, { method: 'POST', body: { reason: 'Reported by a community member for review' } }); Alert.alert('Report received', 'This post has been queued for review.'); } catch (e) { Alert.alert('Could not report', errorMessage(e)); } }}><Text>Report post</Text></Pressable>
+              <Pressable onPress={async () => { try { await api(`/community/posts/${id}/report`, { method: 'POST', body: { reason: 'Reported by a community member for review' } }); Alert.alert('Report received', `This post has been queued for review. For urgent issues email ${SUPPORT_EMAIL}.`); } catch (e) { Alert.alert('Could not report', errorMessage(e)); } }}><Text>Report post</Text></Pressable>
               <Pressable onPress={async () => { try { await api(`/community/users/${livePost.authorId}/block`, { method: 'PUT', body: { blocked: true } }); await refreshCommunity(); router.back(); } catch (e) { Alert.alert('Could not block', errorMessage(e)); } }}><Text>Block author</Text></Pressable>
             </View> : null}
             {!demoMode && livePost.authorId === state.profile.id ? <Button title="Delete my post" onPress={async () => { try { await api(`/community/posts/${id}`, { method: 'DELETE' }); await refreshCommunity(); router.back(); } catch (e) { Alert.alert('Could not delete post', errorMessage(e)); } }} /> : null}

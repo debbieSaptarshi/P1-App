@@ -1,6 +1,8 @@
 import { Alert } from 'react-native';
 import { authClient } from '@/services/supabase';
+import { setAuthIntent } from '@/services/auth-flow';
 import { errorMessage } from '@/services/api';
+import { appStoreActions } from '@/hooks/useAppStore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -23,7 +25,9 @@ const OTP_LENGTH = 6;
 export default function VerifyOtpScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email: string; type: string }>();
-  const type = params.type === 'signup' ? 'signup' : 'recovery';
+  const flow = params.type === 'signup' ? 'signup' : 'recovery';
+  // Supabase sends the same token for link or OTP emails; signup confirmation uses type "email".
+  const verifyType = flow === 'signup' ? 'email' : 'recovery';
   const insets = useSafeAreaInsets();
 
   const [digits, setDigits] = useState<string[]>(() =>
@@ -53,9 +57,15 @@ export default function VerifyOtpScreen() {
     if (!complete || submitting) return;
     setSubmitting(true);
     try {
-      const { error } = await authClient().auth.verifyOtp({ email: params.email, token: digits.join(''), type });
+      setAuthIntent(flow === 'recovery' ? 'recovery' : 'signup');
+      const { error } = await authClient().auth.verifyOtp({ email: params.email, token: digits.join(''), type: verifyType });
       if (error) throw error;
-      router.replace(type === 'recovery' ? '/(auth)/update-password' : '/(onboarding)/welcome');
+      if (flow === 'recovery') {
+        router.replace('/(auth)/update-password');
+      } else {
+        void appStoreActions.startOnboarding();
+        router.replace('/(onboarding)/welcome');
+      }
     } catch (error) { Alert.alert('Verification failed', errorMessage(error));
     } finally {
       setSubmitting(false);
@@ -81,8 +91,9 @@ export default function VerifyOtpScreen() {
           <Text style={styles.kicker}>VERIFICATION</Text>
           <Text style={styles.title}>Enter the 6-digit code</Text>
           <Text style={styles.subtitle}>
-            We just sent a one-time password to your email. Enter it below to continue resetting
-            your account.
+            {flow === 'signup'
+              ? 'We sent a 6-digit code to your email. Enter it below to confirm your account.'
+              : 'We sent a 6-digit code to your email. Enter it below to reset your password.'}
           </Text>
         </View>
 
@@ -111,7 +122,7 @@ export default function VerifyOtpScreen() {
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Resend code"
-            onPress={async () => { try { const result = type === 'signup' ? await authClient().auth.resend({ type: 'signup', email: params.email }) : await authClient().auth.resetPasswordForEmail(params.email); if (result.error) throw result.error; setDigits(Array.from({ length: OTP_LENGTH }, () => '')); Alert.alert('Code sent', 'Check your email.'); } catch (e) { Alert.alert('Unable to resend', errorMessage(e)); } }}
+            onPress={async () => { try { const result = flow === 'signup' ? await authClient().auth.resend({ type: 'signup', email: params.email }) : await authClient().auth.resetPasswordForEmail(params.email); if (result.error) throw result.error; setDigits(Array.from({ length: OTP_LENGTH }, () => '')); Alert.alert('Code sent', 'Check your email for the 6-digit code.'); } catch (e) { Alert.alert('Unable to resend', errorMessage(e)); } }}
           >
             <Text style={styles.resend}>Didn&apos;t get a code? Resend</Text>
           </TouchableOpacity>

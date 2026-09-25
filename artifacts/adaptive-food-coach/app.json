@@ -7,27 +7,51 @@
     "icon": "./assets/images/icon.png",
     "scheme": "adaptive-food-coach",
     "userInterfaceStyle": "automatic",
+    "primaryColor": "#1570EF",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.anonymous.adaptivefoodcoach",
+      "usesAppleSignIn": true,
+      "bundleIdentifier": "com.sevenlabs.adaptivefoodcoach",
+      "buildNumber": "1",
       "infoPlist": {
+        "CFBundleDisplayName": "Adaptive Food Coach",
         "NSCameraUsageDescription": "Allow Adaptive Food Coach to scan meals, barcodes, and nutrition labels.",
         "NSPhotoLibraryUsageDescription": "Allow Adaptive Food Coach to choose photos of meals and labels.",
-        "NSPhotoLibraryAddUsageDescription": "Allow Adaptive Food Coach to save your milestone share card to Photos."
+        "NSPhotoLibraryAddUsageDescription": "Allow Adaptive Food Coach to save your milestone share card to Photos.",
+        "NSMicrophoneUsageDescription": "Allow Adaptive Food Coach to transcribe your food and exercise descriptions.",
+        "NSLocationWhenInUseUsageDescription": "Allow Adaptive Food Coach to measure the distance of your runs while the app is open.",
+        "NSUserNotificationsUsageDescription": "Allow Adaptive Food Coach to send meal-logging and weekly-review reminders you turn on.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.anonymous.adaptivefoodcoach",
-      "permissions": [
-        "CAMERA",
-        "READ_MEDIA_IMAGES"
+      "package": "com.sevenlabs.adaptivefoodcoach",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#1570EF"
+      },
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0A0A",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain"
+        }
+      ],
       [
         "expo-camera",
         {
@@ -49,9 +73,14 @@
           "isAccessMediaLocationEnabled": false
         }
       ],
-      "expo-sharing",
-      "expo-clipboard",
       "expo-secure-store",
+      "expo-apple-authentication",
+      [
+        "expo-web-browser",
+        {
+          "experimentalLauncherActivity": false
+        }
+      ],
       [
         "expo-audio",
         {
@@ -59,17 +88,26 @@
           "enableBackgroundPlayback": false
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "enableBackgroundRemoteNotifications": false
+        }
+      ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Adaptive Food Coach to measure the distance of your runs while the app is open."
+          "locationWhenInUsePermission": "Allow Adaptive Food Coach to measure the distance of your runs while the app is open.",
+          "isAndroidForegroundServiceEnabled": false
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "supportsRTL": false
     }
   }
 }

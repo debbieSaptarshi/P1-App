@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, scanFromURLAsync } from 'expo-camera';
@@ -51,16 +51,22 @@ const MODES: { id: ScanMode; label: string; icon: number }[] = [
 ];
 
 const HELP_COPY: Record<ScanMode, string> = {
-  food: 'Fill the frame with your meal, then tap the shutter. We’ll estimate the foods and portions for you to review.',
+  food: 'Fill the frame with the whole plate. Include a roti, spoon, or katori if you can. We estimate foods, then you confirm place, portion, and extra oil.',
   barcode: 'Line up the barcode inside the frame. We’ll look it up as soon as it reads.',
   label: 'Align the nutrition facts label, then tap the shutter.',
 };
 
 export default function FoodCameraScreen() {
   const router = useRouter();
+  const { returnTo, mealSlot } = useLocalSearchParams<{ returnTo?: string; mealSlot?: string }>();
   const { state } = useAppStore();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
+  /** When opened from the chat tracker, hand the analysis back instead of opening review. */
+  const afterAnalysis = () => {
+    if (returnTo === 'track') { router.back(); return; }
+    router.push('/scan/review');
+  };
   const barcodeLock = useRef(false);
   const [mode, setMode] = useState<ScanMode>('food');
   const [zoom, setZoom] = useState<ZoomLevel>('1x');
@@ -88,14 +94,15 @@ export default function FoodCameraScreen() {
   const handleBarcode = async (code: string) => {
     if (barcodeLock.current || capturing) return;
     barcodeLock.current = true; setCapturing(true);
-    try { await lookupBarcode(code); router.push('/scan/review'); }
+    try { await lookupBarcode(code); afterAnalysis(); }
     catch (error) { Alert.alert('Barcode lookup', errorMessage(error)); }
     finally { setCapturing(false); barcodeLock.current = false; }
   };
   const analyze = async (uri: string, base64?: string, mediaType = 'image/jpeg') => {
     await requestAiConsent(state.preferences.aiConsent);
-    await analyzeFood({ kind: mode === 'label' ? 'label' : 'food', uri, base64, mediaType });
-    router.push('/scan/review');
+    const slot = mealSlot === 'breakfast' || mealSlot === 'lunch' || mealSlot === 'dinner' || mealSlot === 'snack' ? mealSlot : undefined;
+    await analyzeFood({ kind: mode === 'label' ? 'label' : 'food', uri, base64, mediaType, mealSlot: slot });
+    afterAnalysis();
   };
   const handleCapture = async () => {
     if (capturing) return;

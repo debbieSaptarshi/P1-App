@@ -16,11 +16,15 @@ export default function AuthLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
+      <Stack.Screen name="splash" />
+      <Stack.Screen name="intro" />
       <Stack.Screen name="sign-in" />
       <Stack.Screen name="register" />
       <Stack.Screen name="forgot-password" />
       <Stack.Screen name="verify-otp" />
+      <Stack.Screen name="update-password" />
       <Stack.Screen name="reset-success" />
+      <Stack.Screen name="guest" />
     </Stack>
   );
 }

@@ -5,7 +5,7 @@ import { HttpError } from './errors';
 let adminClient: SupabaseClient | undefined;
 export function admin() {
   const c = config();
-  return adminClient ??= createClient(c.SUPABASE_URL, c.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  return adminClient ??= createClient(c.SUPABASE_URL, c.adminKey, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 declare global { namespace Express { interface Request { user: User; } } }
 export const requireAuth: RequestHandler = async (req, _res, next) => {

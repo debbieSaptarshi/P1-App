@@ -2,7 +2,7 @@ import type { AiTask } from '@workspace/backend-contracts';
 import { config } from '../lib/config';
 import { HttpError } from '../lib/errors';
 
-export interface ModelInput { system: string; text: string; schema: Record<string, unknown>; image?: { base64: string; mediaType: string }; }
+export interface ModelInput { system: string; text: string; schema: Record<string, unknown>; image?: { base64: string; mediaType: string }; imageDetail?: 'auto' | 'high'; }
 export interface ModelOutput { value: unknown; inputTokens?: number; outputTokens?: number; }
 export interface AiProvider { name: string; model: string; generate(input: ModelInput): Promise<ModelOutput>; }
 async function request(url: string, headers: Record<string,string>, body: unknown) {
@@ -17,7 +17,7 @@ export class OpenAIProvider implements AiProvider {
   constructor(public model: string, private key: string) {}
   async generate(input: ModelInput): Promise<ModelOutput> {
     const content: unknown[] = [{ type: 'input_text', text: input.text }];
-    if (input.image) content.push({ type: 'input_image', image_url: `data:${input.image.mediaType};base64,${input.image.base64}`, detail: 'auto' });
+    if (input.image) content.push({ type: 'input_image', image_url: `data:${input.image.mediaType};base64,${input.image.base64}`, detail: input.imageDetail ?? 'auto' });
     const result = await request('https://api.openai.com/v1/responses', { Authorization: `Bearer ${this.key}` }, {
       model: this.model, store: false, instructions: input.system, input: [{ role: 'user', content }],
       max_output_tokens: 4096, text: { format: { type: 'json_schema', name: 'food_coach_result', strict: true, schema: input.schema } },

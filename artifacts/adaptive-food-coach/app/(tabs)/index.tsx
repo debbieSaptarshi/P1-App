@@ -17,20 +17,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useAppStore } from '@/hooks/useAppStore';
 import { Feather } from '@expo/vector-icons';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LAST_MEALS, type LastMealDish } from '@/constants/lastMeals';
+import { CircularSaucer } from '@/components/meals/CircularSaucer';
+import { JournalHome } from '@/components/home/JournalHome';
+import { PlanHome } from '@/components/home/PlanHome';
+import { ProgramDashboard, ProgramFocusCard } from '@/components/home/ProgramDashboard';
+import { resolveProgramHome } from '@/constants/programs';
 
 const { width } = Dimensions.get('window');
 const MEAL_CARD_WIDTH = 250;
 const MEAL_CARD_GAP = 16;
-const DASHBOARD_CAROUSEL_SIDE_INSET = 20;
-const PAGE_WIDTH = width - DASHBOARD_CAROUSEL_SIDE_INSET * 2;
-const SUGAR_GOAL_G = 50;
+const DASHBOARD_SIDE_INSET = 20;
+const PAGE_WIDTH = width;
 const WATER_STEP_ML = 50;
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
@@ -82,7 +85,13 @@ export default function HomeScreen() {
   const router = useRouter();
   const { state, streakDays, foodLogForDate, actions } = useAppStore();
   const profile = state.profile;
-  const meals = demoMode ? LAST_MEALS : recentMeals(state.foodLogs);
+  const { program, layout: homeLayout } = resolveProgramHome({
+    programId: state.preferences.programId,
+    layoutOverride: state.preferences.homeLayout,
+  });
+  const loggedMeals = demoMode ? LAST_MEALS : recentMeals(state.foodLogs);
+  const meals = loggedMeals.length > 0 ? loggedMeals : LAST_MEALS.slice(0, 3);
+  const sampleMeal = loggedMeals.length === 0;
   const days = useMemo(() => currentWeekDays(), []);
   const todayIso = isoDate(new Date());
 
@@ -98,9 +107,9 @@ export default function HomeScreen() {
     const fiberLeft = Math.max(0, goals.fiber - totals.fiber);
     const sugarLeft = 0; // Sugar is not tracked by the nutrition contract.
     const sodiumLeft = Math.max(0, goals.sodium - totals.sodium);
-    const fiberProgress = goals.fiber > 0 ? ((goals.fiber - fiberLeft) / goals.fiber) * 100 : 0;
-    const sugarProgress = SUGAR_GOAL_G > 0 ? ((SUGAR_GOAL_G - sugarLeft) / SUGAR_GOAL_G) * 100 : 0;
-    const sodiumProgress = goals.sodium > 0 ? ((goals.sodium - sodiumLeft) / goals.sodium) * 100 : 0;
+    const fiberProgress = progressPct(totals.fiber, goals.fiber);
+    const sugarProgress = 0;
+    const sodiumProgress = progressPct(totals.sodium, goals.sodium);
     const caloriesLeft = Math.round(remaining(goals.calories, totals.calories));
     const proteinLeft = remaining(goals.protein, totals.protein);
     const carbsLeft = remaining(goals.carbs, totals.carbs);
@@ -110,32 +119,37 @@ export default function HomeScreen() {
     const proteinProgress = progressPct(totals.protein, goals.protein);
     const fatProgress = progressPct(totals.fat, goals.fat);
     const healthScore = Math.max(
-      1,
+      0,
       Math.min(
         10,
-        Math.round((calorieProgress + carbProgress + proteinProgress + fiberProgress) / 25),
+        Math.round((calorieProgress + carbProgress + proteinProgress + fiberProgress) / 40),
       ),
     );
     const caloriesBurned = state.exerciseLogs
       .filter((entry) => entry.date === selectedIso)
       .reduce((sum, entry) => sum + entry.caloriesBurned, 0);
     const steps = state.steps.find(s => s.date === selectedIso)?.count ?? 0;
-    const stepsProgress = profile.dailyStepGoal > 0 ? (steps / profile.dailyStepGoal) * 100 : 0;
-    const burnProgress = Math.min(100, (caloriesBurned / 500) * 100);
+    const stepsProgress = progressPct(steps, profile.dailyStepGoal);
+    const burnProgress = progressPct(caloriesBurned, 500);
     const advice =
       calorieProgress < 50
         ? 'Your log is still filling in. Add meals and water to see your progress.'
         : 'These totals reflect your logged meals. Ask the coach for ideas that fit your preferences.';
     return {
       caloriesLeft,
+      calorieGoal: goals.calories,
       calorieProgress,
       proteinLeft,
+      proteinGoal: goals.protein,
       carbsLeft,
+      carbGoal: goals.carbs,
       fatLeft,
+      fatGoal: goals.fat,
       proteinProgress,
       carbProgress,
       fatProgress,
       fiberLeft,
+      fiberGoal: goals.fiber,
       sugarLeft,
       sodiumLeft,
       fiberProgress,
@@ -147,36 +161,83 @@ export default function HomeScreen() {
       stepsProgress,
       caloriesBurned,
       burnProgress,
-      waterMl: selectedLog.waterMl ?? 250,
+      waterMl: selectedLog.waterMl ?? 0,
       waterGoalMl: goals.waterMl,
     };
   }, [profile, selectedIso, selectedLog, state.exerciseLogs, state.steps]);
+
+  const remainingTotals = {
+    caloriesLeft: dashboardMetrics.caloriesLeft,
+    calorieGoal: dashboardMetrics.calorieGoal,
+    calorieProgress: dashboardMetrics.calorieProgress,
+    proteinLeft: dashboardMetrics.proteinLeft,
+    proteinGoal: dashboardMetrics.proteinGoal,
+    proteinProgress: dashboardMetrics.proteinProgress,
+    carbsLeft: dashboardMetrics.carbsLeft,
+    carbGoal: dashboardMetrics.carbGoal,
+    carbProgress: dashboardMetrics.carbProgress,
+    fatLeft: dashboardMetrics.fatLeft,
+    fatGoal: dashboardMetrics.fatGoal,
+    fatProgress: dashboardMetrics.fatProgress,
+    fiberLeft: dashboardMetrics.fiberLeft,
+    fiberGoal: dashboardMetrics.fiberGoal,
+    fiberProgress: dashboardMetrics.fiberProgress,
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 120 }
+          { paddingTop: insets.top + 16, paddingBottom: 72 + (insets.bottom || 16) }
         ]}
         showsVerticalScrollIndicator={false}
+        style={styles.pageScroll}
       >
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.header}>
           <View style={styles.headerLeft}>
-            <Image
-              source={require('@/assets/images/roasted-chicken.png')}
-              style={styles.avatar}
-              accessibilityLabel="User profile"
-            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open profile"
+              testID="open-profile"
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/profile');
+              }}
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Image
+                source={require('@/assets/images/roasted-chicken.png')}
+                style={styles.avatar}
+                accessibilityLabel="User profile"
+              />
+            </Pressable>
             <View style={styles.headerTextContainer}>
               <Text style={[styles.greeting, { color: colors.mutedForeground }]}>{greetingForNow()}</Text>
               <Text style={[styles.name, { color: colors.foreground }]}>{profile.name}</Text>
+              {program.id !== 'general' ? (
+                <Text style={styles.programLabel}>{program.title}</Text>
+              ) : null}
             </View>
           </View>
-          <View style={styles.streakPill}>
-            <Feather name="award" size={19} color={colors.foreground} />
-            <Text style={[styles.streakText, { color: colors.foreground }]}>{streakDays}</Text>
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Personalise your home"
+              testID="personalise-home"
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/profile-edit/home');
+              }}
+              style={({ pressed }) => [styles.personaliseBtn, pressed && styles.pressed]}
+            >
+              <Feather name="sliders" size={18} color={colors.foreground} />
+            </Pressable>
+            <View style={styles.streakPill}>
+              <Feather name="award" size={19} color={colors.foreground} />
+              <Text style={[styles.streakText, { color: colors.foreground }]}>{streakDays}</Text>
+            </View>
           </View>
         </Animated.View>
 
@@ -218,14 +279,25 @@ export default function HomeScreen() {
           ))}
         </Animated.View>
 
-        {/* Dashboard Pager */}
+        <ProgramFocusCard program={program} />
+
+        {homeLayout !== 'overview' ? (
+          <View style={{ marginBottom: 16 }}>
+            <ProgramDashboard program={program} totals={remainingTotals} />
+          </View>
+        ) : null}
+
+        {homeLayout === 'journal' ? <JournalHome selectedIso={selectedIso} program={program} /> : null}
+        {homeLayout === 'plan' ? <PlanHome selectedIso={selectedIso} program={program} /> : null}
+
+        {homeLayout === 'overview' ? (
+        <React.Fragment>
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.pagerWrapper}>
           <ScrollView
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            style={{ width: PAGE_WIDTH }}
-            snapToInterval={PAGE_WIDTH}
+            style={styles.pagerScroll}
             decelerationRate="fast"
             scrollEventThrottle={16}
             onMomentumScrollEnd={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -235,52 +307,16 @@ export default function HomeScreen() {
             }}
             testID="dashboard-pager"
           >
-            {/* Page 1: Calories */}
-            <View style={{ width: PAGE_WIDTH }} testID="dashboard-page-calories">
-              <View style={styles.dashboardCard}>
-                <View>
-                  <MaterialCommunityIcons name="fire" size={26} color="#FF6A1A" style={styles.caloriesIcon} />
-                  <Text style={styles.caloriesNumber}>
-                    {dashboardMetrics.caloriesLeft.toLocaleString()}
-                  </Text>
-                  <Text style={styles.caloriesLabel}>Calories Left</Text>
-                </View>
-                <View style={styles.progressRingContainer}>
-                  <Text style={styles.progressLabel}>
-                    {Math.round(dashboardMetrics.calorieProgress)}%
-                  </Text>
-                  <OvalProgress
-                    progress={dashboardMetrics.calorieProgress}
-                    color="#FFFFFF"
-                    trackColor="#2B3549"
-                    thumbColor={colors.primary}
-                  />
-                </View>
-              </View>
-              <View style={styles.macrosRow}>
-                <MacroCard
-                  title="Protein Left"
-                  value={`${Math.round(dashboardMetrics.proteinLeft)} g`}
-                  progress={dashboardMetrics.proteinProgress}
-                  emoji="🥚"
-                />
-                <MacroCard
-                  title="Carbs Left"
-                  value={`${Math.round(dashboardMetrics.carbsLeft)} g`}
-                  progress={dashboardMetrics.carbProgress}
-                  emoji="🍞"
-                />
-                <MacroCard
-                  title="Fat Left"
-                  value={`${Math.round(dashboardMetrics.fatLeft)} g`}
-                  progress={dashboardMetrics.fatProgress}
-                  emoji="🥑"
-                />
-              </View>
+            {/* Page 1: Program remaining cards */}
+            <View style={styles.pagerPage} testID="dashboard-page-calories">
+              <ProgramDashboard
+                program={program}
+                totals={remainingTotals}
+              />
             </View>
 
             {/* Page 2: Fiber / Sugar / Sodium + Health Score */}
-            <View style={{ width: PAGE_WIDTH, gap: 8 }} testID="dashboard-page-health-score">
+            <View style={[styles.pagerPage, styles.pagerPageStack]} testID="dashboard-page-health-score">
               <View style={styles.macrosRow}>
                 <NutrientMiniCard
                   value={`${Math.round(dashboardMetrics.fiberLeft)}`}
@@ -312,7 +348,7 @@ export default function HomeScreen() {
             </View>
 
             {/* Page 3: Steps / Burn + Water */}
-            <View style={{ width: PAGE_WIDTH, gap: 8 }} testID="dashboard-page-workout">
+            <View style={[styles.pagerPage, styles.pagerPageStack]} testID="dashboard-page-workout">
               <View style={styles.macrosRow}>
                 <ActivityMiniCard
                   label="Steps"
@@ -368,11 +404,11 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          {!meals.length ? <Text style={{ paddingHorizontal: 20, paddingVertical: 12 }}>No meals logged yet. Tap + to add your first meal.</Text> : null}
           <View style={styles.radialCarousel}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
+              style={styles.carouselScroll}
               contentContainerStyle={[
                 styles.carouselContent,
                 { paddingHorizontal: Math.max((width - MEAL_CARD_WIDTH) / 2, 20) },
@@ -397,6 +433,10 @@ export default function HomeScreen() {
                   active={activeMeal === index}
                   onPress={() => {
                     Haptics.selectionAsync();
+                    if (sampleMeal) {
+                      router.push('/log-food');
+                      return;
+                    }
                     router.push(demoMode ? `/log-food/dish/${meal.id}` : `/log-food/detail/${meal.id}`);
                   }}
                 />
@@ -432,6 +472,8 @@ export default function HomeScreen() {
             ))}
           </View>
         </Animated.View>
+        </React.Fragment>
+        ) : null}
 
       </ScrollView>
     </View>
@@ -441,25 +483,65 @@ export default function HomeScreen() {
 function CircularProgress({ size, progress, strokeWidth, color, trackColor }: any) {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : 0));
+  const drawn = (clamped / 100) * circumference;
 
   return (
     <Svg width={size} height={size}>
       <Circle stroke={trackColor} fill="none" cx={size / 2} cy={size / 2} r={radius} strokeWidth={strokeWidth} />
-      <Circle
-        stroke={color}
-        fill="none"
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        strokeWidth={strokeWidth}
-        strokeDasharray={circumference}
-        strokeDashoffset={strokeDashoffset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
+      {clamped > 0.5 ? (
+        <Circle
+          stroke={color}
+          fill="none"
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${drawn} ${circumference}`}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      ) : null}
     </Svg>
   );
+}
+
+const OVAL_R = 38;
+const OVAL_TOP = 4;
+const OVAL_BOTTOM = 80;
+const OVAL_LEFT = 42;
+const OVAL_RIGHT = 142;
+const OVAL_CY = 42;
+const OVAL_START_X = 92;
+const OVAL_TOP_LEFT = OVAL_START_X - OVAL_LEFT;
+const OVAL_SEMI = Math.PI * OVAL_R;
+const OVAL_BOTTOM_LEN = OVAL_RIGHT - OVAL_LEFT;
+const OVAL_TOP_RIGHT = OVAL_RIGHT - OVAL_START_X;
+const OVAL_LENGTH = OVAL_TOP_LEFT + OVAL_SEMI + OVAL_BOTTOM_LEN + OVAL_SEMI + OVAL_TOP_RIGHT;
+const OVAL_TRACK =
+  'M92 4 H42 A38 38 0 0 0 4 42 A38 38 0 0 0 42 80 H142 A38 38 0 0 0 180 42 A38 38 0 0 0 142 4 H92';
+
+function ovalPoint(progress: number): { x: number; y: number } {
+  const distance = (Math.max(0, Math.min(100, progress)) / 100) * OVAL_LENGTH;
+  if (distance <= OVAL_TOP_LEFT) {
+    return { x: OVAL_START_X - distance, y: OVAL_TOP };
+  }
+  let rest = distance - OVAL_TOP_LEFT;
+  if (rest <= OVAL_SEMI) {
+    const angle = -Math.PI / 2 - (rest / OVAL_SEMI) * Math.PI;
+    return { x: OVAL_LEFT + OVAL_R * Math.cos(angle), y: OVAL_CY + OVAL_R * Math.sin(angle) };
+  }
+  rest -= OVAL_SEMI;
+  if (rest <= OVAL_BOTTOM_LEN) {
+    return { x: OVAL_LEFT + rest, y: OVAL_BOTTOM };
+  }
+  rest -= OVAL_BOTTOM_LEN;
+  if (rest <= OVAL_SEMI) {
+    const angle = Math.PI / 2 - (rest / OVAL_SEMI) * Math.PI;
+    return { x: OVAL_RIGHT + OVAL_R * Math.cos(angle), y: OVAL_CY + OVAL_R * Math.sin(angle) };
+  }
+  rest -= OVAL_SEMI;
+  return { x: OVAL_RIGHT - rest, y: OVAL_TOP };
 }
 
 function OvalProgress({
@@ -473,19 +555,26 @@ function OvalProgress({
   trackColor: string;
   thumbColor: string;
 }) {
-  const trackPath = 'M92 4 H42 A38 38 0 0 0 4 42 A38 38 0 0 0 42 80 H142 A38 38 0 0 0 180 42 A38 38 0 0 0 142 4 H92';
-  const progressPath = 'M92 4 H42 A38 38 0 0 0 4 42 A38 38 0 0 0 42 80 H132';
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : 0));
+  const drawn = (clamped / 100) * OVAL_LENGTH;
+  const thumb = ovalPoint(clamped);
+
   return (
     <Svg width={184} height={84} viewBox="0 0 184 84">
-      <Path d={trackPath} fill="none" stroke={trackColor} strokeWidth={8} strokeLinecap="round" />
-      <Path
-        d={progressPath}
-        fill="none"
-        stroke={color}
-        strokeWidth={8}
-        strokeLinecap="round"
-      />
-      <Circle cx={132} cy={80} r={9} fill={thumbColor} stroke="#FFFFFF" strokeWidth={5} />
+      <Path d={OVAL_TRACK} fill="none" stroke={trackColor} strokeWidth={8} strokeLinecap="round" />
+      {clamped > 0.5 ? (
+        <Path
+          d={OVAL_TRACK}
+          fill="none"
+          stroke={color}
+          strokeWidth={8}
+          strokeLinecap="round"
+          strokeDasharray={`${drawn} ${OVAL_LENGTH}`}
+        />
+      ) : null}
+      {clamped > 0.5 ? (
+        <Circle cx={thumb.x} cy={thumb.y} r={9} fill={thumbColor} stroke="#FFFFFF" strokeWidth={5} />
+      ) : null}
     </Svg>
   );
 }
@@ -587,8 +676,8 @@ function ProgressRing({
   const strokeWidth = 6;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(100, progress));
-  const strokeDashoffset = circumference * (1 - clamped / 100);
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : 0));
+  const drawn = (clamped / 100) * circumference;
   const angle = ((clamped / 100) * 360 - 90) * (Math.PI / 180);
   const thumbX = size / 2 + radius * Math.cos(angle);
   const thumbY = size / 2 + radius * Math.sin(angle);
@@ -600,23 +689,24 @@ function ProgressRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="#F5F5F5"
+          stroke="#E2E8F0"
           strokeWidth={strokeWidth}
           fill="none"
         />
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="#1570EF"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-        {clamped > 0 ? (
+        {clamped > 0.5 ? (
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="#1570EF"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={`${drawn} ${circumference}`}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        ) : null}
+        {clamped > 0.5 ? (
           <Circle cx={thumbX} cy={thumbY} r={6} fill="#1570EF" />
         ) : null}
       </Svg>
@@ -725,11 +815,7 @@ function RadialMealCard({
       ]}
     >
       <View style={styles.plateHalo}>
-        <Image
-          source={meal.image}
-          style={styles.mealImage}
-          resizeMode="cover"
-        />
+        <CircularSaucer source={meal.image} size={150} testID={`meal-saucer-${meal.id}`} />
       </View>
       <Text style={[styles.mealName, { color: colors.foreground }]} numberOfLines={2}>
         {meal.name}
@@ -776,6 +862,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  pageScroll: {
+    overflow: 'visible',
+  },
   scrollContent: {
     paddingHorizontal: 20,
   },
@@ -797,13 +886,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
   },
   name: {
-    fontSize: 18,
-    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    fontFamily: 'Inter_500Medium',
+  },
+  programLabel: {
+    marginTop: 2,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    color: '#1570EF',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#E5E5EA',
   },
   streakPill: {
@@ -818,6 +913,19 @@ const styles = StyleSheet.create({
   streakText: {
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  personaliseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dateStrip: {
     flexDirection: 'row',
@@ -892,7 +1000,19 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   pagerWrapper: {
+    marginHorizontal: -DASHBOARD_SIDE_INSET,
     marginBottom: 24,
+    overflow: 'hidden',
+  },
+  pagerScroll: {
+    width: PAGE_WIDTH,
+  },
+  pagerPage: {
+    width: PAGE_WIDTH,
+    paddingHorizontal: DASHBOARD_SIDE_INSET,
+  },
+  pagerPageStack: {
+    gap: 8,
   },
   macrosRow: {
     flexDirection: 'row',
@@ -1090,7 +1210,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   mealsSection: {
-    marginBottom: 32,
+    marginBottom: 0,
     marginHorizontal: -20,
   },
   sectionHeader: {
@@ -1109,14 +1229,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_500Medium',
   },
+  carouselScroll: {
+    overflow: 'visible',
+  },
   carouselContent: {
     gap: MEAL_CARD_GAP,
     paddingTop: 58,
-    paddingBottom: 18,
+    paddingBottom: 28,
   },
   radialCarousel: {
     position: 'relative',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   edgeBlur: {
     position: 'absolute',
@@ -1133,12 +1256,14 @@ const styles = StyleSheet.create({
   },
   mealCard: {
     width: MEAL_CARD_WIDTH,
-    minHeight: 326,
+    height: 326,
+    maxHeight: 326,
     borderRadius: 24,
     paddingTop: 104,
     paddingHorizontal: 16,
     paddingBottom: 16,
     alignItems: 'center',
+    overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 10, height: 20 },
     shadowOpacity: 0.08,
@@ -1147,17 +1272,11 @@ const styles = StyleSheet.create({
   },
   plateHalo: {
     position: 'absolute',
-    top: -52,
-    width: 178,
-    height: 178,
-    borderRadius: 89,
+    top: -50,
+    width: 150,
+    height: 150,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  mealImage: {
-    width: 154,
-    height: 154,
-    borderRadius: 77,
   },
   mealName: {
     minHeight: 60,
@@ -1168,11 +1287,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   calorieBlock: {
-    height: 64,
+    height: 58,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 1,
-    marginVertical: 10,
+    marginVertical: 4,
   },
   calorieLabel: {
     fontSize: 10,
@@ -1212,7 +1331,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 16,
+    marginTop: 4,
   },
   paginationDot: {
     height: 6,

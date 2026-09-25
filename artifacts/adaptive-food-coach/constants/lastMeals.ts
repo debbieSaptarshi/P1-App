@@ -39,6 +39,8 @@ export interface LastMealDish {
 }
 
 const roastedChicken = require('@/assets/images/meals/roasted-chicken.png');
+const hatkoraChicken = require('@/assets/images/meals/hatkora-chicken.png');
+const shutkiBhorta = require('@/assets/images/meals/shutki-bhorta.png');
 const andaCurry = require('@/assets/images/meals/anda-curry.png');
 const besanCurry = require('@/assets/images/meals/besan-curry.png');
 const dishHero = require('@/assets/images/meals/dish-hero.png');
@@ -74,6 +76,64 @@ export const LAST_MEALS: LastMealDish[] = [
       { name: 'Broccoli', percent: 8 },
       { name: 'Shrimp', percent: 20 },
       { name: 'Peas', percent: 2 },
+    ],
+  },
+  {
+    id: 'hatkora-chicken',
+    name: 'Hatkora Chicken',
+    titleLine1: 'Hatkora',
+    titleLine2: 'Chicken',
+    image: hatkoraChicken,
+    heroImage: hatkoraChicken,
+    calories: 320,
+    protein: 28,
+    carbs: 8,
+    fat: 18,
+    fiber: 2,
+    sugar: 3.2,
+    sodium: 480,
+    healthScore: 7,
+    verification: { status: 'pending', label: 'Sylheti home kitchen' },
+    ingredients: [
+      { id: 'chicken', name: 'Chicken', calories: 220, grams: 150 },
+      { id: 'hatkora', name: 'Hatkora', calories: 25, grams: 40 },
+      { id: 'onion', name: 'Onion', calories: 30, grams: 50 },
+      { id: 'mustard-oil', name: 'Mustard oil', calories: 45, grams: 5 },
+    ],
+    segments: [
+      { name: 'Chicken', percent: 55 },
+      { name: 'Hatkora', percent: 18 },
+      { name: 'Onion', percent: 15 },
+      { name: 'Masala', percent: 12 },
+    ],
+  },
+  {
+    id: 'shutki-bhorta',
+    name: 'Shutki Bhorta',
+    titleLine1: 'Shutki',
+    titleLine2: 'Bhorta',
+    image: shutkiBhorta,
+    heroImage: shutkiBhorta,
+    calories: 185,
+    protein: 18,
+    carbs: 6,
+    fat: 10,
+    fiber: 2,
+    sugar: 1.4,
+    sodium: 620,
+    healthScore: 6,
+    verification: { status: 'pending', label: 'Sylheti home kitchen' },
+    ingredients: [
+      { id: 'shutki', name: 'Dried fish', calories: 120, grams: 40 },
+      { id: 'chili', name: 'Green chili', calories: 8, grams: 15 },
+      { id: 'onion', name: 'Onion', calories: 22, grams: 40 },
+      { id: 'mustard-oil', name: 'Mustard oil', calories: 35, grams: 4 },
+    ],
+    segments: [
+      { name: 'Shutki', percent: 50 },
+      { name: 'Onion', percent: 22 },
+      { name: 'Chili', percent: 16 },
+      { name: 'Oil', percent: 12 },
     ],
   },
   {

@@ -1,3 +1,4 @@
+import { CAMPUS_OUTLETS, dishesForHostel, toFoodItem } from '@workspace/campus-food';
 import type { FoodItem } from '@/types';
 
 /**
@@ -14,7 +15,7 @@ export const ALL_SAMPLE_FOODS: FoodItem[] = [
   { id: 'fd_banana', name: 'Bananas', servingSize: 'tbsp', calories: 105, protein: 1.3, carbs: 27, fat: 0.4, fiber: 3.1, sodium: 1 },
 ];
 
-/** Sylheti / home kitchen dishes for the At Home tab. */
+/** Home / fridge dishes (Figma “Fridge” tab). */
 export const AT_HOME_FOODS: FoodItem[] = [
   { id: 'fd_shutki_bhorta', name: 'Shutki Bhorta', servingSize: 'katori', calories: 185, protein: 18, carbs: 6, fat: 10, fiber: 2, sodium: 620 },
   { id: 'fd_hatkora_chicken', name: 'Hatkora Chicken', servingSize: 'plate', calories: 320, protein: 28, carbs: 8, fat: 18, fiber: 2, sodium: 480 },
@@ -28,11 +29,21 @@ export const AT_HOME_FOODS: FoodItem[] = [
   { id: 'fd_aloo_bhorta', name: 'Aloo Bhorta', servingSize: 'katori', calories: 140, protein: 3, carbs: 18, fat: 6, fiber: 2, sodium: 280 },
 ];
 
-export const OFFICE_CANTEEN_FOODS: FoodItem[] = [
-  { id: 'fd_canteen_veg_thali', name: 'Veg Thali', servingSize: 'plate', calories: 520, protein: 16, carbs: 72, fat: 16, fiber: 9, sodium: 740 },
-  { id: 'fd_canteen_chicken_rice', name: 'Chicken Curry + Rice', servingSize: 'plate', calories: 610, protein: 32, carbs: 68, fat: 22, fiber: 4, sodium: 820 },
-  { id: 'fd_canteen_dal_roti', name: 'Dal + Roti', servingSize: 'plate', calories: 380, protein: 14, carbs: 58, fat: 9, fiber: 8, sodium: 540 },
-  { id: 'fd_canteen_egg_curry', name: 'Egg Curry Meal', servingSize: 'plate', calories: 450, protein: 20, carbs: 48, fat: 18, fiber: 4, sodium: 610 },
+function campusByPriority(priority: 1 | 2 | 3): FoodItem[] {
+  const outlets = new Set(CAMPUS_OUTLETS.filter((outlet) => outlet.priority === priority).map((outlet) => outlet.id));
+  return dishesForHostel().filter((dish) => outlets.has(dish.outletId)).map(toFoodItem);
+}
+
+export const MESS_FOODS: FoodItem[] = campusByPriority(1);
+export const NEARBY_CANTEEN_FOODS: FoodItem[] = campusByPriority(2);
+export const NEARBY_RESTAURANT_FOODS: FoodItem[] = campusByPriority(3);
+export const OFFICE_CANTEEN_FOODS: FoodItem[] = NEARBY_CANTEEN_FOODS;
+
+/** Figma “Log food / Saved Food” sample dishes when the user has no bookmarks yet. */
+export const SAVED_SAMPLE_FOODS: FoodItem[] = [
+  { id: 'fd_roasted_chicken', name: 'Roasted Chicken', servingSize: 'plate', calories: 637, protein: 65, carbs: 45, fat: 18, fiber: 2, sodium: 480 },
+  { id: 'fd_anda_curry', name: 'Anda Curry', servingSize: 'katori', calories: 637, protein: 65, carbs: 45, fat: 18, fiber: 3, sodium: 610 },
+  { id: 'fd_besan_sabji', name: 'Besan Sabji', servingSize: 'katori', calories: 637, protein: 65, carbs: 45, fat: 18, fiber: 6, sodium: 390 },
 ];
 
 export const ZOMATO_FOODS: FoodItem[] = [
@@ -45,7 +56,10 @@ export const ZOMATO_FOODS: FoodItem[] = [
 export const LOG_FOOD_CATALOG: FoodItem[] = [
   ...ALL_SAMPLE_FOODS,
   ...AT_HOME_FOODS,
-  ...OFFICE_CANTEEN_FOODS,
+  ...MESS_FOODS,
+  ...NEARBY_CANTEEN_FOODS,
+  ...NEARBY_RESTAURANT_FOODS,
+  ...SAVED_SAMPLE_FOODS,
   ...ZOMATO_FOODS,
 ];
 

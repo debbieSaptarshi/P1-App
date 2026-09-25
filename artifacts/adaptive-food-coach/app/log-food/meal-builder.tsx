@@ -133,7 +133,7 @@ export default function MealBuilderScreen() {
     };
     actions.saveMealRecipe(recipe);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace('/log-food/saved');
+    router.replace('/log-food?tab=saved');
   }, [actions, canSave, items, recipeName, router, servings, state.foodDatabase, totals]);
 
   return (

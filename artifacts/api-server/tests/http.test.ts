@@ -29,6 +29,13 @@ test('private routes reject missing and invalid sessions',async()=>{
 test('verified user owns snapshot; query parameters cannot impersonate another account',async()=>{
  const response=await fetch(`${base}/api/v1/state?user_id=attacker`,{headers:{Authorization:'Bearer valid-token'}});assert.equal(response.status,200);assert.equal(lastRpc.p_user,user);assert.equal(response.headers.get('cache-control'),'no-store');
 });
+test('campus catalog is served from the IITB seed without a database round-trip',async()=>{
+ const response=await fetch(`${base}/api/v1/campus/foods?hostel=H2&priority=2`,{headers:{Authorization:'Bearer valid-token'}});
+ assert.equal(response.status,200);
+ const body=await response.json() as {foods:{name:string;outletId?:string}[];counts:{dishes:number}};
+ assert.ok(body.counts.dishes>100);
+ assert.ok(body.foods.some((food)=>/shawarma|franky|sandwich/i.test(food.name)));
+});
 test('invalid writes and AI without consent fail before touching database/provider',async()=>{
  const headers={Authorization:'Bearer valid-token','Content-Type':'application/json'};
  assert.equal((await fetch(`${base}/api/v1/sync`,{method:'POST',headers,body:'{"changes":[]}'})).status,400);
@@ -38,4 +45,12 @@ test('invalid writes and AI without consent fail before touching database/provid
 test('unknown endpoints and untrusted browser origins fail cleanly',async()=>{
  assert.equal((await fetch(`${base}/unknown`)).status,404);
  assert.equal((await fetch(`${base}/api/healthz`,{headers:{Origin:'https://untrusted.example'}})).status,403);
+});
+test('legal pages are public HTML',async()=>{
+ const privacy=await fetch(`${base}/legal/privacy`);
+ assert.equal(privacy.status,200);
+ assert.match(privacy.headers.get('content-type')??'', /html/);
+ assert.match(await privacy.text(),/Privacy Policy/);
+ assert.equal((await fetch(`${base}/legal/terms`)).status,200);
+ assert.equal((await fetch(`${base}/legal/delete-account`)).status,200);
 });

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing } from '@/constants/tokens';
+import { CircularSaucer } from '@/components/meals/CircularSaucer';
 import type { LastMealDish } from '@/constants/lastMeals';
 
 export function LastMealCard({
@@ -20,9 +21,7 @@ export function LastMealCard({
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
-      <View style={styles.thumbWrap}>
-        <Image source={dish.image} style={styles.thumb} resizeMode="cover" />
-      </View>
+      <CircularSaucer source={dish.image} size={84} testID={`last-meal-saucer-${dish.id}`} />
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={2}>
           {dish.name}
@@ -67,18 +66,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   pressed: { opacity: 0.92 },
-  thumbWrap: {
-    width: 84,
-    height: 84,
-    overflow: 'visible',
-  },
-  thumb: {
-    position: 'absolute',
-    width: 112,
-    height: 112,
-    left: -14,
-    top: 0,
-  },
   info: {
     flex: 1,
     gap: 4,

@@ -33,16 +33,21 @@ export function CircularProgress({
 }: CircularProgressProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const target = Math.max(0, Math.min(raw ? 100 : 1, progress));
-  const value = useSharedValue(target);
+  const target = Math.max(0, Math.min(raw ? 100 : 1, Number.isFinite(progress) ? progress : 0));
+  const value = useSharedValue(0);
 
   useEffect(() => {
     value.value = withTiming(target, { duration: 600 });
   }, [target, value]);
 
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: circumference * (1 - value.value / (raw ? 100 : 1)),
-  }));
+  const animatedProps = useAnimatedProps(() => {
+    const pct = value.value / (raw ? 100 : 1);
+    const drawn = circumference * Math.max(0, Math.min(1, pct));
+    return {
+      strokeDasharray: `${drawn} ${circumference}`,
+      strokeOpacity: pct > 0.005 ? 1 : 0,
+    };
+  });
 
   return (
     <View
@@ -69,7 +74,6 @@ export function CircularProgress({
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           fill="none"
-          strokeDasharray={circumference}
           animatedProps={animatedProps}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />

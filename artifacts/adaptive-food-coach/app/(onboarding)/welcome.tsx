@@ -1,197 +1,145 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Button } from '@/components/ui';
-import { colors, radii, spacing } from '@/constants/tokens';
-import { useAppStore } from '@/hooks/useAppStore';
+import { StatusBar } from 'expo-status-bar';
+import { BrandMarkIcon } from '@/components/icons/OnboardingIcons';
+import { colors } from '@/constants/tokens';
+import { suppressOnboardingGuard } from './_components/onboarding-guard';
+import { appStoreActions, useAppStore } from '@/hooks/useAppStore';
 
-/**
- * Pre-step ceremony for the personalization quiz. Calls
- * `actions.startOnboarding()` to reset the persisted answer map and step
- * counter, then transitions to the first quiz screen.
- */
 export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { actions } = useAppStore();
-
+  const { state } = useAppStore();
   const [submitting, setSubmitting] = useState(false);
+
+  const firstName = state.profile.name.trim().split(' ')[0];
+  const headline = firstName
+    ? `${firstName}, let's build your plan`
+    : 'Tracking calories just got a lot easier!';
 
   const handleStart = async () => {
     if (submitting) return;
     setSubmitting(true);
     try {
-      await actions.startOnboarding();
+      void appStoreActions.startOnboarding();
+      suppressOnboardingGuard();
       router.replace('/(onboarding)/step-gender');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleSignOut = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await appStoreActions.reset();
+      router.replace('/(auth)/sign-in');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <ScrollView
-      style={styles.flex}
-      contentContainerStyle={[
-        styles.scroll,
-        { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
-      <Animated.View entering={FadeInUp.duration(500)} style={styles.hero}>
-        <View style={styles.crest}>
-          <Feather name="zap" size={28} color={colors.textInverse} />
-        </View>
-        <Text style={styles.kicker}>PERSONALIZED FOR YOU</Text>
-        <Text style={styles.title}>Build your adaptive plan</Text>
-        <Text style={styles.subtitle}>
-          Answer 10 quick questions and we&apos;ll craft a meal, workout and habit plan that adapts
-          with you every day.
-        </Text>
-      </Animated.View>
-
-      <View style={styles.bullets}>
-        {bullets.map((bullet, idx) => (
-          <Animated.View
-            key={bullet.title}
-            entering={FadeInDown.duration(420).delay(280 + idx * 90)}
-            style={styles.bulletRow}
-          >
-            <View style={styles.bulletIcon}>
-              <Feather name={bullet.icon as any} size={18} color={colors.primary} />
-            </View>
-            <View style={styles.bulletText}>
-              <Text style={styles.bulletTitle}>{bullet.title}</Text>
-              <Text style={styles.bulletDesc}>{bullet.desc}</Text>
-            </View>
-          </Animated.View>
-        ))}
+    <View style={[styles.flex, { paddingTop: insets.top, paddingBottom: insets.bottom + 12 }]}>
+      <StatusBar style="dark" />
+      <View style={styles.hero}>
+        <BrandMarkIcon size={80} />
+        <Text style={styles.title}>{headline}</Text>
+        {state.profile.email ? (
+          <Text style={styles.account}>Signed in as {state.profile.email}</Text>
+        ) : null}
       </View>
-
       <View style={styles.footer}>
-        <Button
-          title={submitting ? 'Starting…' : "Let's Start"}
-          onPress={handleStart}
-          loading={submitting}
-          trailingIcon="arrow-right"
-        />
-        <Text style={styles.footnote}>
-          Takes about 90 seconds · your answers stay private to your account
-        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void handleStart()}
+          style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
+        >
+          <Text style={styles.ctaLabel}>{submitting ? 'Starting…' : 'Set up my plan'}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void handleSignOut()}
+          style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+        >
+          <Text style={styles.secondaryMuted}>Wrong account?</Text>
+          <Text style={styles.secondaryAction}> Sign out</Text>
+        </Pressable>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
-const bullets = [
-  {
-    icon: 'heart',
-    title: 'Smart meal guidance',
-    desc: 'Plate recommendations tuned to your goals, schedule and biometrics.',
-  },
-  {
-    icon: 'activity',
-    title: 'Adaptive workouts',
-    desc: 'Daily activity targets that flex with recovery and energy levels.',
-  },
-  {
-    icon: 'target',
-    title: 'Habit nudges',
-    desc: 'Tiny actions that compound into long-term, sustainable change.',
-  },
-];
-
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-  },
   hero: {
-    alignItems: 'flex-start',
-    paddingTop: spacing.xl,
-    marginBottom: spacing.xxl,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    gap: 16,
   },
-  crest: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.md,
+  title: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.2,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  account: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  footer: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  cta: {
+    minHeight: 46,
+    borderRadius: 999,
     backgroundColor: colors.darkSurface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
+    paddingVertical: 12,
   },
-  kicker: {
+  ctaLabel: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    color: colors.primary,
-    letterSpacing: 1.4,
-    marginBottom: spacing.xs,
-  },
-  title: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 32,
-    lineHeight: 38,
-    color: colors.textPrimary,
-    letterSpacing: -0.8,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
+    fontSize: 16,
     lineHeight: 22,
-    color: colors.textMuted,
+    letterSpacing: -0.18,
+    color: colors.textInverse,
   },
-  bullets: {
-    gap: spacing.md,
-    marginBottom: spacing.xxl,
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  bulletIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.lg,
-    backgroundColor: colors.primarySoft,
+  secondary: {
+    minHeight: 46,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    paddingVertical: 12,
   },
-  bulletText: {
-    flex: 1,
+  secondaryMuted: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: colors.textMuted,
   },
-  bulletTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
+  secondaryAction: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
     color: colors.textPrimary,
-    marginBottom: 2,
   },
-  bulletDesc: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textMuted,
-  },
-  footer: {
-    gap: spacing.sm,
-    marginTop: 'auto',
-  },
-  footnote: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    textAlign: 'center',
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
+  pressed: { opacity: 0.85 },
 });

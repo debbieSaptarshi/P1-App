@@ -1,11 +1,12 @@
 import 'react-native-url-polyfill/auto';
+import '@/services/webcrypto';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { createClient, processLock } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 export const demoMode = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 export const backendConfigured = !!url && !!key && !!process.env.EXPO_PUBLIC_API_URL;
 // Chunk sessions for native secure storage implementations with small value limits.
@@ -32,7 +33,7 @@ const secureStorage = {
  },
 };
 export const supabase = url && key ? createClient(url,key,{
- auth:{storage:Platform.OS==='web'?AsyncStorage:secureStorage,autoRefreshToken:true,persistSession:true,detectSessionInUrl:false,lock:processLock},
+ auth:{storage:Platform.OS==='web'?AsyncStorage:secureStorage,autoRefreshToken:true,persistSession:true,detectSessionInUrl:false,flowType:'pkce'},
 }) : null;
 if(Platform.OS!=='web' && supabase){
  AppState.addEventListener('change',state=>{if(state==='active')supabase.auth.startAutoRefresh();else supabase.auth.stopAutoRefresh();});

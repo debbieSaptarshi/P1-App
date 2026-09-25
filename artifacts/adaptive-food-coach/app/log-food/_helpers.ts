@@ -1,7 +1,7 @@
 // Helpers used by the log-food screens to round, format, and lookup data
 // from the global store. Kept colocated with the screens that need them.
 
-import type { DailyFoodLog, FoodItem, MealType } from '@/types';
+import type { DailyFoodLog, FoodItem, MealRecipe, MealType, SavedFood } from '@/types';
 
 /** Round a number to 1 decimal place, returning a number. */
 export function round1(n: number): number {
@@ -90,3 +90,54 @@ export const MEAL_LABELS: Record<MealType, string> = {
   dinner: 'Dinner',
   snack: 'Snack',
 };
+
+interface CustomMacroPayload {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber?: number;
+  sodium?: number;
+  servingSize?: string;
+  brand?: string;
+}
+
+function parseSavedMacros(notes: string | undefined): CustomMacroPayload | null {
+  if (!notes) return null;
+  try {
+    const parsed = JSON.parse(notes) as CustomMacroPayload;
+    if (typeof parsed.calories === 'number') return parsed;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** Flatten a bookmarked food into a catalog-shaped row for the Saved Foods tab. */
+export function savedFoodToFoodItem(item: SavedFood): FoodItem {
+  const macros = parseSavedMacros(item.notes);
+  return {
+    id: item.ingredients[0]?.foodId ?? item.id,
+    name: item.name,
+    servingSize: macros?.servingSize ?? '1 serving',
+    calories: macros?.calories ?? item.calories,
+    protein: macros?.protein ?? 0,
+    carbs: macros?.carbs ?? 0,
+    fat: macros?.fat ?? 0,
+    fiber: macros?.fiber,
+    sodium: macros?.sodium,
+    brand: macros?.brand,
+  };
+}
+
+export function recipeToFoodItem(recipe: MealRecipe): FoodItem {
+  return {
+    id: recipe.id,
+    name: recipe.name,
+    servingSize: `${recipe.servings} serving${recipe.servings === 1 ? '' : 's'}`,
+    calories: recipe.totalCalories,
+    protein: recipe.totalProtein,
+    carbs: recipe.totalCarbs,
+    fat: recipe.totalFat,
+  };
+}

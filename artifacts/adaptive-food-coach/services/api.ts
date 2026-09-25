@@ -5,6 +5,7 @@ export class ApiError extends Error {
 export async function api<T>(path:string,options: {method?:string;body?:unknown;idempotencyKey?:string;signal?:AbortSignal}={}):Promise<T>{
  const base=process.env.EXPO_PUBLIC_API_URL;
  if(!base)throw new ApiError(503,'NOT_CONFIGURED','Configure EXPO_PUBLIC_API_URL to connect the backend.');
+ if(!__DEV__ && /localhost|127\.0\.0\.1/i.test(base))throw new ApiError(503,'NOT_CONFIGURED','This release is missing its production API URL.');
  const {data:{session},error}=await authClient().auth.getSession();
  if(error||!session)throw new ApiError(401,'AUTH_REQUIRED','Please sign in.');
  const response=await fetch(`${base.replace(/\/$/,'')}/api/v1${path}`,{

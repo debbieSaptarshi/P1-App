@@ -21,6 +21,9 @@
     },
     {
       "path": "../../lib/backend-contracts"
+    },
+    {
+      "path": "../../lib/campus-food"
     }
   ]
 }

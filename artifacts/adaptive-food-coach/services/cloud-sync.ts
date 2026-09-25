@@ -31,7 +31,7 @@ export class CloudSync {
  async initialize(){
   const raw=await this.deps.storage.getItem(this.storageKey);if(this.closed)return;
   if(raw){this.cache=JSON.parse(raw);this.emit('syncing');await this.flush();}
-  else{try{this.cache.base=await this.deps.request<Snapshot>('/state');if(this.closed)return;this.cache.records=this.cache.base.records;await this.save();this.emit('synced');}catch(e){this.emit('error',errorMessage(e));throw e;}}
+  else{try{this.cache.base=await this.deps.request<Snapshot>('/state');if(this.closed)return;this.cache.records=this.cache.base.records;await this.save();this.emit('synced');}catch(e){this.emit('offline',errorMessage(e));}}
  }
  async commit(records:CloudRecord[]){
   if(this.closed)throw new Error('This account is no longer active.');

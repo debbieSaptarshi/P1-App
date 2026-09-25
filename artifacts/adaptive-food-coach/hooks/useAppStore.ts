@@ -8,12 +8,16 @@ import { localDate } from '@/services/dates';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
+import { buildCustomPlan } from '@/lib/customPlan';
 import type { User } from '@supabase/supabase-js';
 import { demoMode, supabase } from '@/services/supabase';
 import { CloudSync, type SyncStatus } from '@/services/cloud-sync';
 import { fromRecords, toRecords } from '@/services/records';
 import { clearReminders } from '@/services/notifications';
 import { api, errorMessage } from '@/services/api';
+import { bootstrapFromOnboarding, createCareFoodEvent, fetchHousehold } from '@/services/care';
+import type { CareHouseholdState } from '@/lib/careOnboarding';
+import { parseAllergies, parseHouseholdDraft } from '@/lib/careOnboarding';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   AccountabilityGroup,
@@ -34,6 +38,9 @@ import {
   UserProfile,
   WeightEntry,
 } from '@/types';
+import type { HomeLayoutId } from '@/constants/homeLayouts';
+import { resolveProgram, type ProgramId } from '@/constants/programs';
+import type { PlanTestResult } from '@/constants/planTest';
 import { seedProfile } from './seedProfile';
 import { mergeFoodCatalog } from '@/constants/logFoodCatalog';
 import { seedFoodDatabase } from './seedFoodDatabase';
@@ -53,8 +60,9 @@ const STORAGE_KEY = '@adaptive_food_coach/v2';
 interface PersistedState {
   steps: { date: string; count: number; source: 'manual'|'device' }[];
   profile: UserProfile;
-  preferences: { reminders?: {daily?:boolean;weekly?:boolean;sound?:boolean}; aiConsent?: boolean; theme?: 'light'|'dark'|'system'; notifications?: boolean };
+  preferences: { reminders?: {daily?:boolean;weekly?:boolean;sound?:boolean}; aiConsent?: boolean; theme?: 'light'|'dark'|'system'; notifications?: boolean; homeLayout?: HomeLayoutId; programId?: ProgramId; planTest?: PlanTestResult };
   onboarding: OnboardingState;
+  careHousehold: CareHouseholdState;
   foodDatabase: FoodItem[];
   foodLogs: DailyFoodLog[];
   savedFoods: SavedFood[];
@@ -70,14 +78,23 @@ interface PersistedState {
 
 const initialState: PersistedState = {
   steps: [],
-  preferences: {},
+  preferences: { programId: 'general' },
   profile: seedProfile,
   onboarding: {
     stepIndex: 0,
-    totalSteps: 10,
+    totalSteps: 18,
     answers: {},
     generating: false,
     complete: false,
+  },
+  careHousehold: {
+    members: [
+      { id: 'self', displayName: 'You', relationship: 'self', isSelf: true },
+      { id: 'amma', displayName: 'Amma', relationship: 'parent' },
+      { id: 'son', displayName: 'Your son', relationship: 'child' },
+    ],
+    selectedMemberId: 'self',
+    actorMemberId: 'self',
   },
   foodDatabase: mergeFoodCatalog(seedFoodDatabase),
   foodLogs: seedFoodLogs,
@@ -92,13 +109,19 @@ const initialState: PersistedState = {
   challenges: seedChallenges,
 };
 
+function userDisplayName(user?: User | null) {
+  const meta = user?.user_metadata ?? {};
+  return String(meta.full_name ?? meta.name ?? [meta.given_name, meta.family_name].filter(Boolean).join(' ') ?? '').trim();
+}
+
 function emptyState(user?: User): PersistedState {
   const now = new Date().toISOString();
   return { ...initialState,
-    profile: { ...seedProfile, id: user?.id ?? '', name: user?.user_metadata?.name ?? '', email: user?.email ?? '', avatar: undefined,
+    profile: { ...seedProfile, id: user?.id ?? '', name: userDisplayName(user), email: user?.email ?? '', avatar: undefined,
       gender: 'prefer_not_to_say', dateOfBirth: '', heightCm: 0, currentWeightKg: 0, targetWeightKg: 0,
       workoutFrequency: 'never', goals: [], allergies: [], createdAt: now, updatedAt: now },
     onboarding: { ...initialState.onboarding, answers: {} }, preferences: {},
+    careHousehold: { members: [], selectedMemberId: undefined, actorMemberId: null },
     foodLogs: [], savedFoods: [], mealRecipes: [], exerciseLogs: [], weightHistory: [],
     milestones: seedMilestones.map(m => ({ ...m, unlocked: false, progress: 0, unlockedAt: undefined })),
     groups: [], groupPosts: [], leaderboard: [], challenges: [],
@@ -144,19 +167,40 @@ async function hydrate() {
   }
 }
 
-async function persist(next: PersistedState) {
-  if (!demoMode && !cloud) throw new Error('Sign in before saving changes.');
+function applyLocalState(next: PersistedState) {
   singletonState = next;
   notify();
+}
+
+async function persistCloud() {
   try {
-    if (demoMode) await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    else await cloud!.commit(toRecords(next));
+    if (demoMode) {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(singletonState));
+      return;
+    }
+    if (!cloud) return;
+    await cloud.commit(toRecords(singletonState));
   } catch (err) {
-    syncStatus = 'error'; syncMessage = errorMessage(err); notify();
+    syncStatus = 'error';
+    syncMessage = errorMessage(err);
+    notify();
   }
 }
 
+async function persist(next: PersistedState) {
+  applyLocalState(next);
+  await persistCloud();
+}
+
 void hydrate();
+
+export function getAccountSnapshot() {
+  return {
+    onboarding: singletonState.onboarding,
+    profile: singletonState.profile,
+    hydrated,
+  };
+}
 
 export async function initializeAccount(user: User | null) {
   if (!user) void clearReminders();
@@ -172,14 +216,26 @@ export async function initializeAccount(user: User | null) {
     syncStatus = status; syncMessage = message;
     if (status !== 'loading' && !(status === 'error' && !hydrated)) {
       const community = { groups: singletonState.groups, groupPosts: singletonState.groupPosts, challenges: singletonState.challenges, leaderboard: singletonState.leaderboard };
-      singletonState = { ...fromRecords(records, emptyState(user)), ...community };
+      const incoming = fromRecords(records, emptyState(user));
+      const localAnswers = Object.keys(singletonState.onboarding.answers).length;
+      const incomingAnswers = Object.keys(incoming.onboarding.answers).length;
+      const keepLocalOnboarding =
+        !singletonState.onboarding.complete &&
+        (singletonState.onboarding.stepIndex > incoming.onboarding.stepIndex ||
+          (singletonState.onboarding.stepIndex === incoming.onboarding.stepIndex &&
+            localAnswers >= incomingAnswers));
+      singletonState = {
+        ...incoming,
+        ...community,
+        onboarding: keepLocalOnboarding ? singletonState.onboarding : incoming.onboarding,
+      };
       hydrated = true;
     }
     notify();
   }, { storage: AsyncStorage, request: api, uuid: Crypto.randomUUID });
   cloud = instance;
   initializing = instance.initialize().then(async () => {
-    if (generation === accountGeneration) { hydrated = true; notify(); await refreshCommunity(); }
+    if (generation === accountGeneration) { hydrated = true; notify(); await refreshCommunity(); await appStoreActions.refreshCareHousehold(); }
   }).finally(() => { if (generation === accountGeneration) initializing = null; });
   return initializing;
 }
@@ -244,7 +300,18 @@ export const appStoreActions = {
   },
   setSteps(date: string, count: number) { return update({ steps: [...singletonState.steps.filter(s => s.date !== date), { date, count, source: 'manual' }] }); },
   updatePreferences(patch: Partial<PersistedState['preferences']>) { return update({ preferences: { ...singletonState.preferences, ...patch } }); },
+  subscribeToProgram(programId: ProgramId) {
+    const program = resolveProgram(programId);
+    return update({
+      preferences: {
+        ...singletonState.preferences,
+        programId: program.id,
+        homeLayout: program.defaultLayout,
+      },
+    });
+  },
   setAiConsent(consent: boolean) { return update({ preferences: { ...singletonState.preferences, aiConsent: consent } }); },
+  savePlanTest(result: PlanTestResult) { return update({ preferences: { ...singletonState.preferences, planTest: result } }); },
   setProfile(profile: UserProfile) {
     return update({ profile });
   },
@@ -252,20 +319,28 @@ export const appStoreActions = {
     return update({ profile: { ...singletonState.profile, ...patch } });
   },
   startOnboarding() {
+    if (
+      singletonState.onboarding.stepIndex > 0 ||
+      Object.keys(singletonState.onboarding.answers).length > 0
+    ) {
+      return Promise.resolve();
+    }
     return update({
       onboarding: { ...initialState.onboarding, stepIndex: 0 },
     });
   },
   advanceOnboarding(step: number, answers: OnboardingState['answers']) {
-    return update({
+    applyLocalState({
+      ...singletonState,
       onboarding: {
         ...singletonState.onboarding,
         stepIndex: step,
         answers: { ...singletonState.onboarding.answers, ...answers },
       },
     });
+    void persistCloud();
   },
-  completeOnboarding(answers: OnboardingState['answers']) {
+  async completeOnboarding(answers: OnboardingState['answers']) {
     const profile: UserProfile = {
       ...singletonState.profile,
       updatedAt: new Date().toISOString(),
@@ -278,26 +353,120 @@ export const appStoreActions = {
     if (typeof answers.dob === 'string') profile.dateOfBirth = answers.dob;
     if (Array.isArray(answers.goals)) profile.goals = answers.goals as UserProfile['goals'];
     if (typeof answers.diet === 'string') profile.dietPattern = answers.diet as UserProfile['dietPattern'];
-    return update({
+    const allergies = parseAllergies(answers.allergies);
+    if (allergies.length) profile.allergies = allergies;
+    const plan = buildCustomPlan(answers);
+    profile.nutrientGoals = { ...profile.nutrientGoals, ...plan.nutrients };
+    const draft = parseHouseholdDraft(answers.householdJson);
+    const localCare: CareHouseholdState = {
+      members: [
+        { id: 'self', displayName: profile.name || 'You', relationship: 'self', isSelf: true },
+        ...draft.map((member, index) => ({
+          id: `draft-${index}`,
+          displayName: member.name,
+          relationship: member.relationship,
+        })),
+      ],
+      selectedMemberId: 'self',
+      actorMemberId: 'self',
+    };
+    const next = {
       onboarding: { ...singletonState.onboarding, complete: true, generating: false, answers },
       profile,
-    });
+      careHousehold: localCare,
+    };
+    await update(next);
+    if (!demoMode && activeUser) {
+      try {
+        const remote = await bootstrapFromOnboarding(answers, profile.name);
+        const members = remote.members?.length ? remote.members : localCare.members;
+        const selected = remote.actorMemberId ?? members.find((m) => m.isSelf)?.id ?? members[0]?.id;
+        await update({
+          careHousehold: {
+            householdId: remote.householdId ?? (remote as { household?: { id?: string } }).household?.id,
+            members,
+            selectedMemberId: selected,
+            actorMemberId: remote.actorMemberId ?? selected,
+          },
+        });
+      } catch {
+        // Household sync retries the next time the user opens log food.
+      }
+    }
   },
   logFoods(foods: { food: FoodItem; quantity: number }[], mealType: MealType, date: string) {
     const today = dayLog(date);
-    const entries = [...today.entries, ...foods.map(({ food, quantity }) => ({ id: Crypto.randomUUID(), loggedAt: new Date().toISOString(), date, mealType, food, quantity }))];
-    return update({ foodLogs: [...singletonState.foodLogs.filter(d => d.date !== date), { ...today, entries, totals: totalsFor(entries) }], foodDatabase: [...singletonState.foodDatabase.filter(f => !foods.some(x => x.food.id === f.id)), ...foods.map(x => x.food)] });
+    const care = singletonState.careHousehold;
+    const subject = care.members.find((m) => m.id === care.selectedMemberId) ?? care.members.find((m) => m.isSelf);
+    const actor = care.members.find((m) => m.id === care.actorMemberId) ?? care.members.find((m) => m.isSelf);
+    const addedBy = subject && actor && subject.id !== actor.id ? `Added by ${actor.displayName}` : undefined;
+    const entries = [...today.entries, ...foods.map(({ food, quantity }) => ({
+      id: Crypto.randomUUID(), loggedAt: new Date().toISOString(), date, mealType, food, quantity,
+      subjectMemberId: subject?.id, loggedByMemberId: actor?.id, addedBy,
+    }))];
+    const result = update({ foodLogs: [...singletonState.foodLogs.filter(d => d.date !== date), { ...today, entries, totals: totalsFor(entries) }], foodDatabase: [...singletonState.foodDatabase.filter(f => !foods.some(x => x.food.id === f.id)), ...foods.map(x => x.food)] });
+    if (!demoMode && subject?.id && subject.id.length > 10) {
+      for (const item of foods) {
+        void createCareFoodEvent({
+          subjectMemberId: subject.id,
+          mealSlot: mealType,
+          foodName: item.food.name,
+          localDate: date,
+        }).catch(() => undefined);
+      }
+    }
+    return result;
   },
   logFood(entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) {
     const id = Crypto.randomUUID();
     const loggedAt = new Date().toISOString();
-    const newEntry: FoodLogEntry = { id, loggedAt, ...entry };
+    const care = singletonState.careHousehold;
+    const subject = care.members.find((m) => m.id === (entry.subjectMemberId ?? care.selectedMemberId)) ?? care.members.find((m) => m.isSelf);
+    const actor = care.members.find((m) => m.id === (entry.loggedByMemberId ?? care.actorMemberId)) ?? care.members.find((m) => m.isSelf);
+    const addedBy = entry.addedBy ?? (subject && actor && subject.id !== actor.id ? `Added by ${actor.displayName}` : undefined);
+    const newEntry: FoodLogEntry = {
+      id, loggedAt, ...entry,
+      subjectMemberId: entry.subjectMemberId ?? subject?.id,
+      loggedByMemberId: entry.loggedByMemberId ?? actor?.id,
+      addedBy,
+    };
     const today = dayLog(entry.date);
     const entries = [...today.entries, newEntry];
     const others = singletonState.foodLogs.filter((d) => d.date !== entry.date);
-    return update({
+    const result = update({
       foodLogs: [...others, { ...today, date: entry.date, entries, totals: totalsFor(entries) }],
     });
+    if (!demoMode && newEntry.subjectMemberId && newEntry.subjectMemberId.length > 10) {
+      void createCareFoodEvent({
+        subjectMemberId: newEntry.subjectMemberId,
+        mealSlot: newEntry.mealType,
+        foodName: newEntry.food.name,
+        localDate: newEntry.date,
+      }).catch(() => undefined);
+    }
+    return result;
+  },
+  selectCareMember(memberId: string) {
+    return update({ careHousehold: { ...singletonState.careHousehold, selectedMemberId: memberId } });
+  },
+  async refreshCareHousehold() {
+    if (demoMode) return;
+    try {
+      const snap = await fetchHousehold();
+      if (!snap.household) return;
+      const selected = snap.actorMemberId ?? snap.members.find((m) => m.isSelf)?.id ?? snap.members[0]?.id;
+      await update({
+        careHousehold: {
+          householdId: snap.household.id,
+          inviteCode: snap.household.inviteCode ?? snap.household.invite_code,
+          members: snap.members,
+          selectedMemberId: singletonState.careHousehold.selectedMemberId ?? selected,
+          actorMemberId: snap.actorMemberId,
+        },
+      });
+    } catch {
+      return;
+    }
   },
   updateFoodLog(date: string, entryId: string, patch: Partial<Pick<FoodLogEntry, 'quantity'|'mealType'|'food'>>) {
     const day = dayLog(date); const entries = day.entries.map(e => e.id === entryId ? { ...e, ...patch } : e);

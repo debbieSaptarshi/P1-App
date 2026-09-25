@@ -24,6 +24,7 @@ export type Goal =
   | 'lose_weight'
   | 'maintain_weight'
   | 'gain_muscle'
+  | 'gain_weight'
   | 'improve_health'
   | 'manage_condition';
 
@@ -94,6 +95,13 @@ export interface FoodItem {
   fiber?: number;
   sodium?: number;
   image?: string;
+  catalogId?: string;
+  outletId?: string;
+  portionGrams?: number;
+  oilTsp?: number;
+  matchMethod?: 'catalog' | 'visual' | 'label' | 'text';
+  caloriesLow?: number;
+  caloriesHigh?: number;
 }
 
 export interface FoodLogEntry {
@@ -103,6 +111,9 @@ export interface FoodLogEntry {
   food: FoodItem;
   quantity: number;
   loggedAt: string;
+  subjectMemberId?: string;
+  loggedByMemberId?: string;
+  addedBy?: string;
 }
 
 export interface DailyFoodLog {
