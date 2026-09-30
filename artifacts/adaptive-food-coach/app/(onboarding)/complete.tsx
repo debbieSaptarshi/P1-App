@@ -13,8 +13,8 @@ export default function CompleteScreen() {
   const { actions, state } = useAppStore();
   const plan = useMemo(() => buildCustomPlan(state.onboarding.answers), [state.onboarding.answers]);
 
-  const handleContinue = async () => {
-    await actions.completeOnboarding(state.onboarding.answers);
+  const handleContinue = () => {
+    void actions.completeOnboarding(state.onboarding.answers);
     router.replace('/(tabs)');
   };
 

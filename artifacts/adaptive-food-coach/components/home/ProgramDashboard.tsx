@@ -5,51 +5,56 @@ import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import {
-  formatRemaining,
   remainingFor,
   type ProgramDefinition,
   type RemainingTotals,
 } from '@/constants/programs';
 import { colors, radii } from '@/constants/tokens';
+import { NutrientRingRow } from '@/components/home/NutrientRingCard';
 
 export function ProgramDashboard({
   program,
   totals,
+  hideActions = false,
 }: {
   program: ProgramDefinition;
   totals: RemainingTotals;
+  hideActions?: boolean;
 }) {
   const hero = remainingFor(program.heroMetric, totals);
+  const heroPct = Math.max(0, Math.min(100, hero.progress));
   return (
     <View style={styles.stack} testID={`program-dashboard-${program.id}`}>
       <View style={styles.heroCard}>
-        <Text style={styles.heroValue}>
-          {formatRemaining(hero.left, hero.goal, hero.unit)}
-          <Text style={styles.heroLabel}> {hero.label}</Text>
-        </Text>
-        <View style={styles.track}>
-          <View style={[styles.fill, { width: `${Math.max(0, Math.min(100, hero.progress))}%` }]} />
+        <View style={styles.heroTitle}>
+          <Text style={styles.heroEmoji}>{hero.emoji}</Text>
+          <Text style={styles.heroValue}>{Math.round(hero.left)}</Text>
+          <Text style={styles.heroLabel}>{hero.label}</Text>
+        </View>
+        <View style={styles.heroTrack}>
+          <View style={[styles.heroFill, { width: `${heroPct}%` }]} />
+          <View style={[styles.heroKnob, { left: `${heroPct}%` }]} />
         </View>
       </View>
-      <View style={styles.macroRow}>
-        {program.macroCards.map((card) => {
+      <NutrientRingRow
+        cards={program.macroCards.map((card) => {
           const metric = remainingFor(card, totals);
-          return (
-            <View key={card.id} style={styles.macroCard}>
-              <Text style={styles.macroValue}>
-                {formatRemaining(metric.left, metric.goal, metric.unit)}
-              </Text>
-              <Text style={styles.macroLabel} numberOfLines={1}>
-                {metric.label.replace(' Left', '')} {metric.emoji} Left
-              </Text>
-              <View style={styles.track}>
-                <View style={[styles.fill, { width: `${Math.max(0, Math.min(100, metric.progress))}%` }]} />
-              </View>
-            </View>
-          );
+          const pct = Math.max(0, Math.min(100, metric.progress));
+          return {
+            id: card.id,
+            value: Math.round(metric.left),
+            unit: metric.unit,
+            label: metric.label.replace(' Left', ''),
+            progress: pct,
+            emoji: metric.emoji,
+          };
         })}
-      </View>
-      {program.actionRow === 'scan-database' ? <ScanDatabaseRow /> : <TrackComposer placeholder={program.composerPlaceholder} />}
+      />
+      {hideActions ? null : program.actionRow === 'scan-database' ? (
+        <HomeQuickActions />
+      ) : (
+        <HomeTrackComposer placeholder={program.composerPlaceholder} />
+      )}
     </View>
   );
 }
@@ -64,7 +69,7 @@ export function ProgramFocusCard({ program }: { program: ProgramDefinition }) {
   );
 }
 
-function ScanDatabaseRow() {
+export function HomeQuickActions() {
   const router = useRouter();
   return (
     <View style={styles.actionRow}>
@@ -90,7 +95,7 @@ function ScanDatabaseRow() {
   );
 }
 
-function TrackComposer({ placeholder }: { placeholder: string }) {
+export function HomeTrackComposer({ placeholder }: { placeholder: string }) {
   const router = useRouter();
   const [text, setText] = useState('');
   const submit = () => {
@@ -100,39 +105,41 @@ function TrackComposer({ placeholder }: { placeholder: string }) {
     router.push(message ? { pathname: '/track', params: { text: message } } : '/track');
   };
   return (
-    <View style={styles.composer} testID="home-track-composer">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Scan a meal"
-        onPress={() => {
-          Haptics.selectionAsync();
-          router.push({ pathname: '/track', params: { openCamera: '1' } });
-        }}
-        style={({ pressed }) => [styles.composerIcon, pressed && styles.pressed]}
-      >
-        <Feather name="camera" size={18} color="#64748B" />
-      </Pressable>
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        placeholder={placeholder}
-        placeholderTextColor="#94A3B8"
-        style={styles.composerInput}
-        returnKeyType="send"
-        onSubmitEditing={submit}
-        testID="home-track-input"
-      />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Dictate"
-        onPress={() => {
-          Haptics.selectionAsync();
-          router.push({ pathname: '/track', params: { openVoice: '1' } });
-        }}
-        style={({ pressed }) => [styles.composerIcon, pressed && styles.pressed]}
-      >
-        <Feather name="mic" size={18} color="#64748B" />
-      </Pressable>
+    <View style={styles.composerRow} testID="home-track-composer">
+      <View style={styles.composer}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Scan a meal"
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push({ pathname: '/track', params: { openCamera: '1' } });
+          }}
+          style={({ pressed }) => [styles.composerIcon, pressed && styles.pressed]}
+        >
+          <Feather name="camera" size={18} color="#0F172A" />
+        </Pressable>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder={placeholder}
+          placeholderTextColor="#94A3B8"
+          style={styles.composerInput}
+          returnKeyType="send"
+          onSubmitEditing={submit}
+          testID="home-track-input"
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dictate"
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push({ pathname: '/track', params: { openVoice: '1' } });
+          }}
+          style={({ pressed }) => [styles.composerIcon, pressed && styles.pressed]}
+        >
+          <Feather name="mic" size={18} color="#0F172A" />
+        </Pressable>
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Send"
@@ -140,7 +147,7 @@ function TrackComposer({ placeholder }: { placeholder: string }) {
         onPress={submit}
         style={({ pressed }) => [styles.sendBtn, pressed && styles.pressed]}
       >
-        <Feather name="arrow-up" size={16} color="#FFFFFF" />
+        <Feather name="arrow-up" size={18} color="#0F172A" />
       </Pressable>
     </View>
   );
@@ -176,24 +183,55 @@ function ActionChip({
 const styles = StyleSheet.create({
   stack: { gap: 16 },
   heroCard: {
-    backgroundColor: colors.card,
-    borderRadius: radii.xl,
+    backgroundColor: '#0A0A0A',
+    borderRadius: 24,
     padding: 16,
     gap: 10,
   },
+  heroTitle: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 3,
+  },
+  heroEmoji: {
+    fontSize: 20,
+    lineHeight: 24,
+  },
   heroValue: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 24,
-    lineHeight: 30,
-    letterSpacing: -0.15,
-    color: colors.textPrimary,
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    color: '#FFFFFF',
   },
   heroLabel: {
     fontFamily: 'Inter_400Regular',
     fontSize: 16,
     lineHeight: 22,
     letterSpacing: -0.18,
-    color: colors.textPrimary,
+    color: '#94A3B8',
+  },
+  heroTrack: {
+    height: 9,
+    borderRadius: 11,
+    backgroundColor: '#1E293B',
+    justifyContent: 'center',
+  },
+  heroFill: {
+    height: 9,
+    borderRadius: 12,
+    backgroundColor: '#1570EF',
+  },
+  heroKnob: {
+    position: 'absolute',
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: '#FFFFFF',
+    marginLeft: -8,
+    top: -4,
+    borderWidth: 2,
+    borderColor: '#1570EF',
   },
   macroRow: { flexDirection: 'row', gap: 8 },
   macroCard: {
@@ -209,6 +247,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     letterSpacing: -0.18,
+    color: colors.textPrimary,
+  },
+  macroUnit: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.textPrimary,
   },
   macroLabel: {
@@ -254,18 +298,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   composer: {
-    backgroundColor: colors.card,
+    flex: 1,
+    backgroundColor: '#FFFFFF',
     borderRadius: radii.pill,
-    minHeight: 48,
-    paddingLeft: 14,
-    paddingRight: 6,
-    paddingVertical: 6,
+    height: 48,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
   },
   composerIcon: {
     width: 32,
@@ -281,10 +329,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   sendBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.darkSurface,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
   },

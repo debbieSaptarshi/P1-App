@@ -73,7 +73,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       } catch (e) {
         if (alive && current === generation) setError(errorMessage(e));
       } finally {
-        if (alive && current === generation && switchingAccount) setLoading(false);
+        if (alive && current === generation) setLoading(false);
       }
     };
     const {
@@ -90,7 +90,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (demoMode || !backendConfigured || loading || error || !navigation?.key || introSeen == null) return;
+    if (demoMode || !backendConfigured || loading || error || !navigation?.key) return;
+    if (introSeen == null && !userId) return;
 
     const parts = segments as string[];
     const inAuthGroup = parts[0] === '(auth)';

@@ -220,10 +220,11 @@ export async function initializeAccount(user: User | null) {
       const localAnswers = Object.keys(singletonState.onboarding.answers).length;
       const incomingAnswers = Object.keys(incoming.onboarding.answers).length;
       const keepLocalOnboarding =
-        !singletonState.onboarding.complete &&
-        (singletonState.onboarding.stepIndex > incoming.onboarding.stepIndex ||
-          (singletonState.onboarding.stepIndex === incoming.onboarding.stepIndex &&
-            localAnswers >= incomingAnswers));
+        (singletonState.onboarding.complete && !incoming.onboarding.complete) ||
+        (!singletonState.onboarding.complete &&
+          (singletonState.onboarding.stepIndex > incoming.onboarding.stepIndex ||
+            (singletonState.onboarding.stepIndex === incoming.onboarding.stepIndex &&
+              localAnswers >= incomingAnswers)));
       singletonState = {
         ...incoming,
         ...community,
@@ -370,28 +371,30 @@ export const appStoreActions = {
       selectedMemberId: 'self',
       actorMemberId: 'self',
     };
-    const next = {
+    applyLocalState({
+      ...singletonState,
       onboarding: { ...singletonState.onboarding, complete: true, generating: false, answers },
       profile,
       careHousehold: localCare,
-    };
-    await update(next);
+    });
+    void persistCloud();
     if (!demoMode && activeUser) {
-      try {
-        const remote = await bootstrapFromOnboarding(answers, profile.name);
-        const members = remote.members?.length ? remote.members : localCare.members;
-        const selected = remote.actorMemberId ?? members.find((m) => m.isSelf)?.id ?? members[0]?.id;
-        await update({
-          careHousehold: {
-            householdId: remote.householdId ?? (remote as { household?: { id?: string } }).household?.id,
-            members,
-            selectedMemberId: selected,
-            actorMemberId: remote.actorMemberId ?? selected,
-          },
+      void bootstrapFromOnboarding(answers, profile.name)
+        .then((remote) => {
+          const members = remote.members?.length ? remote.members : localCare.members;
+          const selected = remote.actorMemberId ?? members.find((m) => m.isSelf)?.id ?? members[0]?.id;
+          return update({
+            careHousehold: {
+              householdId: remote.householdId ?? (remote as { household?: { id?: string } }).household?.id,
+              members,
+              selectedMemberId: selected,
+              actorMemberId: remote.actorMemberId ?? selected,
+            },
+          });
+        })
+        .catch(() => {
+          // Household sync retries the next time the user opens log food.
         });
-      } catch {
-        // Household sync retries the next time the user opens log food.
-      }
     }
   },
   logFoods(foods: { food: FoodItem; quantity: number }[], mealType: MealType, date: string) {

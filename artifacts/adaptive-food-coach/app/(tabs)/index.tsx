@@ -26,7 +26,7 @@ import { LAST_MEALS, type LastMealDish } from '@/constants/lastMeals';
 import { CircularSaucer } from '@/components/meals/CircularSaucer';
 import { JournalHome } from '@/components/home/JournalHome';
 import { PlanHome } from '@/components/home/PlanHome';
-import { ProgramDashboard, ProgramFocusCard } from '@/components/home/ProgramDashboard';
+import { HomeQuickActions, HomeTrackComposer, ProgramDashboard, ProgramFocusCard } from '@/components/home/ProgramDashboard';
 import { resolveProgramHome } from '@/constants/programs';
 
 const { width } = Dimensions.get('window');
@@ -94,6 +94,11 @@ export default function HomeScreen() {
   const sampleMeal = loggedMeals.length === 0;
   const days = useMemo(() => currentWeekDays(), []);
   const todayIso = isoDate(new Date());
+  const tomorrowIso = useMemo(() => {
+    const next = new Date();
+    next.setDate(next.getDate() + 1);
+    return isoDate(next);
+  }, []);
 
   const [selectedIso, setSelectedIso] = useState(todayIso);
   const [activeMeal, setActiveMeal] = useState(0);
@@ -221,23 +226,9 @@ export default function HomeScreen() {
               ) : null}
             </View>
           </View>
-          <View style={styles.headerActions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Personalise your home"
-              testID="personalise-home"
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push('/profile-edit/home');
-              }}
-              style={({ pressed }) => [styles.personaliseBtn, pressed && styles.pressed]}
-            >
-              <Feather name="sliders" size={18} color={colors.foreground} />
-            </Pressable>
-            <View style={styles.streakPill}>
-              <Feather name="award" size={19} color={colors.foreground} />
-              <Text style={[styles.streakText, { color: colors.foreground }]}>{streakDays}</Text>
-            </View>
+          <View style={styles.streakPill}>
+            <Text style={styles.streakEmoji}>🏆</Text>
+            <Text style={styles.streakText}>{streakDays}</Text>
           </View>
         </Animated.View>
 
@@ -247,13 +238,14 @@ export default function HomeScreen() {
             (() => {
               const selected = selectedIso === item.iso;
               const isToday = item.iso === todayIso;
+              const isTomorrow = item.iso === tomorrowIso;
+              const highlight = selected || isToday;
               return (
             <Pressable
               key={item.iso}
               style={({ pressed }) => [
                 styles.dateItem,
-                (selected || isToday) && styles.dateItemDark,
-                selected && styles.dateItemSelected,
+                highlight && styles.dateItemToday,
                 pressed && styles.pressed,
               ]}
               onPress={() => {
@@ -265,14 +257,24 @@ export default function HomeScreen() {
               accessibilityState={{ selected }}
               testID={`date-${item.iso}`}
             >
-              <Text style={[
-                styles.dateDay,
-                { color: selected || isToday ? colors.primaryForeground : colors.mutedForeground }
-              ]}>{item.day}</Text>
-              <Text style={[
-                styles.dateNum,
-                { color: selected || isToday ? colors.primaryForeground : colors.mutedForeground }
-              ]}>{item.num}</Text>
+              <Text style={[styles.dateDay, highlight && styles.dateDayToday]}>{item.day}</Text>
+              <View
+                style={[
+                  styles.dateBubble,
+                  isTomorrow && !highlight && styles.dateBubbleTomorrow,
+                  highlight && styles.dateBubbleToday,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dateNum,
+                    (isTomorrow || highlight) && styles.dateNumOnDark,
+                    highlight && styles.dateNumToday,
+                  ]}
+                >
+                  {item.num}
+                </Text>
+              </View>
             </Pressable>
               );
             })()
@@ -308,11 +310,13 @@ export default function HomeScreen() {
             testID="dashboard-pager"
           >
             {/* Page 1: Program remaining cards */}
-            <View style={styles.pagerPage} testID="dashboard-page-calories">
+            <View style={[styles.pagerPage, styles.pagerPageStack]} testID="dashboard-page-calories">
               <ProgramDashboard
                 program={program}
                 totals={remainingTotals}
+                hideActions
               />
+              <HomeQuickActions />
             </View>
 
             {/* Page 2: Fiber / Sugar / Sodium + Health Score */}
@@ -321,7 +325,7 @@ export default function HomeScreen() {
                 <NutrientMiniCard
                   value={`${Math.round(dashboardMetrics.fiberLeft)}`}
                   unit="g"
-                  label="Fiber Left"
+                  label="Fiber"
                   progress={dashboardMetrics.fiberProgress}
                   emoji="🍎"
                 />
@@ -335,7 +339,7 @@ export default function HomeScreen() {
                 <NutrientMiniCard
                   value={`${Math.round(dashboardMetrics.sodiumLeft)}`}
                   unit="mg"
-                  label="Sodium Left"
+                  label="Sodium"
                   progress={dashboardMetrics.sodiumProgress}
                   emoji="🍚"
                 />
@@ -386,6 +390,9 @@ export default function HomeScreen() {
                 ]}
               />
             ))}
+          </View>
+          <View style={styles.trackComposer}>
+            <HomeTrackComposer placeholder={program.composerPlaceholder} />
           </View>
         </Animated.View>
 
@@ -882,11 +889,16 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   greeting: {
-    fontSize: 13,
-    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    fontFamily: 'Inter_400Regular',
+    color: '#94A3B8',
   },
   name: {
     fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.18,
     fontFamily: 'Inter_500Medium',
   },
   programLabel: {
@@ -905,14 +917,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
+    borderRadius: 999,
+    gap: 8,
+  },
+  streakEmoji: {
+    fontSize: 20,
+    lineHeight: 24,
   },
   streakText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 20,
+    lineHeight: 24,
+    color: '#0F172A',
   },
   headerActions: {
     flexDirection: 'row',
@@ -934,33 +954,60 @@ const styles = StyleSheet.create({
   },
   dateItem: {
     alignItems: 'center',
-    justifyContent: 'center',
-    width: 44,
-    height: 60,
-    borderRadius: 22,
+    gap: 4,
+    paddingTop: 8,
+    paddingBottom: 2,
+    paddingHorizontal: 2,
+    borderRadius: 999,
   },
-  dateItemDark: {
+  dateItemToday: {
     backgroundColor: '#0A0A0A',
   },
-  dateItemSelected: {
-    borderWidth: 2,
+  dateBubble: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  dateBubbleToday: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+  dateBubbleTomorrow: {
+    backgroundColor: '#0A0A0A',
     borderColor: '#0A0A0A',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.14,
-    shadowRadius: 4,
   },
   pressed: {
     opacity: 0.65,
   },
   dateDay: {
     fontSize: 12,
-    fontFamily: 'Inter_500Medium',
-    marginBottom: 4,
+    lineHeight: 16,
+    letterSpacing: -0.12,
+    fontFamily: 'Inter_400Regular',
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  dateDayToday: {
+    color: '#FFFFFF',
   },
   dateNum: {
     fontSize: 16,
-    fontFamily: 'Inter_600SemiBold',
+    lineHeight: 22,
+    letterSpacing: -0.18,
+    fontFamily: 'Inter_500Medium',
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  dateNumOnDark: {
+    color: '#FFFFFF',
+  },
+  dateNumToday: {
+    color: '#0F172A',
   },
   dashboardCard: {
     backgroundColor: '#0A0A0A',
@@ -1003,6 +1050,10 @@ const styles = StyleSheet.create({
     marginHorizontal: -DASHBOARD_SIDE_INSET,
     marginBottom: 24,
     overflow: 'hidden',
+    gap: 16,
+  },
+  trackComposer: {
+    paddingHorizontal: DASHBOARD_SIDE_INSET,
   },
   pagerScroll: {
     width: PAGE_WIDTH,

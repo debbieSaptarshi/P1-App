@@ -18,7 +18,8 @@ import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { EyeIcon } from '@/components/icons/AuthIcons';
 import { colors } from '@/constants/tokens';
 import { authClient } from '@/services/supabase';
-import { setAuthIntent } from '@/services/auth-flow';
+import { getAccountSnapshot } from '@/hooks/useAppStore';
+import { resolvePostAuthRoute, setAuthIntent } from '@/services/auth-flow';
 import { errorMessage } from '@/services/api';
 
 export default function SignInScreen() {
@@ -57,13 +58,14 @@ export default function SignInScreen() {
           password: devPassword,
         });
         if (signInError) throw signInError;
+        router.replace(resolvePostAuthRoute(getAccountSnapshot().onboarding, 'signin') as '/(tabs)');
       } catch (caught) {
         setError(errorMessage(caught));
       } finally {
         setSubmitting(false);
       }
     })();
-  }, [params.autologin]);
+  }, [params.autologin, router]);
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
@@ -76,6 +78,7 @@ export default function SignInScreen() {
         password,
       });
       if (signInError) throw signInError;
+      router.replace(resolvePostAuthRoute(getAccountSnapshot().onboarding, 'signin') as '/(tabs)');
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
